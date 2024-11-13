@@ -1,0 +1,408 @@
+.App {
+  text-align: center;
+}
+
+.permission-container input[type="checkbox"] {
+  margin-right: 8px;
+}
+
+.permission-container {
+  column-count: 3;
+  column-gap: 15px;
+}
+
+.permission-container>div {
+  margin: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  margin-bottom: 10px;
+  break-inside: avoid;
+}
+
+.permission-container .card {
+  margin-bottom: 0.4rem;
+}
+
+.subbox-margin {
+  margin-left: 20px;
+  margin-top: 5px;
+}
+
+.custom-divider {
+  background-color: #f3f3f9;
+  opacity: 0.1;
+  height: 1px;
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.bg-soft-primary {
+  background-color: #e2e5ee !important;
+}
+
+.bg-soft-danger {
+  background-color: #f065482e !important;
+}
+
+.italic-label {
+  font-style: italic;
+  font-weight: 400;
+}
+
+.App-logo {
+  height: 40vmin;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .App-logo {
+    animation: App-logo-spin infinite 20s linear;
+  }
+}
+
+.App-header {
+  background-color: #282c34;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(10px + 2vmin);
+  color: white;
+}
+
+.App-link {
+  color: #61dafb;
+}
+
+@keyframes App-logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.table-container {
+  margin-left: 5px;
+  margin-right: 5px;
+}
+
+.rdt_TableRow {
+  min-height: 35px !important;
+}
+
+.rdt_TableHead>div {
+  min-height: 40px;
+  background: #e2e5ee;
+  border-top: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+html[data-layout-mode="dark"] .rdt_TableHead>div {
+  background-color: transparent;
+}
+
+/* tables space */
+.rdt_TableHeadRow>div {
+  padding: 0px 10px;
+}
+
+.rdt_TableBody>div>div {
+  padding: 0px 10px;
+}
+
+.button-margin {
+  margin-left: 4px;
+  margin-right: 6px;
+}
+
+.add-button-margin {
+  margin-right: 10px;
+}
+
+.dropdown-height {
+  height: 25px;
+  align-content: center;
+}
+
+.picker-margin {
+  margin-left: 10px;
+  margin-bottom: 5px;
+}
+
+.range-margin {
+  margin-left: -5px;
+  margin-bottom: 10px;
+}
+
+.navbar-menu .navbar-nav .nav-link[data-bs-toggle="collapse"][aria-expanded="true"]:after {
+  transform: rotate(0deg);
+}
+
+.active-item:after {
+  transform: rotate(90deg) !important;
+  color: var(--vz-vertical-menu-item-active-color);
+}
+
+.child-table-container {
+  display: flex;
+  justify-content: center;
+}
+
+.tree-node {
+  border-bottom: 1px solid #ccc;
+}
+
+.parent-node {
+  font-weight: 500;
+  background-color: #ffffff;
+}
+
+.child-node td {
+  padding-left: 20px;
+}
+
+table th,
+table td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #ddd;
+}
+
+.custom-table-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #ffffff;
+  padding: 0;
+}
+
+.order-padding {
+  margin-left: 10px;
+  margin-right: 10px;
+  margin-bottom: 10px;
+}
+
+.popup-position {
+  right: -70% !important;
+}
+
+.text-base {
+  font-size: 1rem;
+  line-height: 1.5rem;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.sub-font-size {
+  font-size: 14px;
+  color: #797979;
+}
+
+.itemconfiguration {
+  overflow-y: auto;
+}
+
+.categories-filter {
+  white-space: nowrap;
+}
+
+.input-margin {
+  margin-left: -14px;
+  margin-right: 80px;
+}
+
+.margin-input {
+  margin-left: 10px;
+}
+
+.range-button {
+  margin-right: 80px;
+}
+
+.row-margin {
+  margin-left: 9px;
+}
+
+.radio-margin {
+  margin-left: 20px;
+  border-color: #40528a;
+}
+
+.badge-danger-custom {
+  background-color: red;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  position: absolute;
+  top: -6px;
+  right: -6px;
+}
+
+.custom-tabs .nav-link {
+  padding: 0.3rem 1rem;
+  color: #000000;
+  background-color: #f3f3f9;
+  margin-right: 0.5rem;
+  border-radius: 0.25rem;
+  height: 2rem;
+}
+
+.custom-tabs .nav-link.active {
+  background-color: #405189;
+  color: #fff;
+}
+
+.badges {
+  margin-left: 0.5rem;
+}
+
+.badge-success {
+  background-color: #405189;
+}
+
+/* src/components/TicketModule.css */
+
+.ticket-container {
+  display: flex;
+  height: 100vh;
+  font-family: Arial, sans-serif;
+  background-color: #f9fafb;
+}
+
+.ticket-main-content {
+  width: 80%;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ticket-comment {
+  margin-bottom: 14px;
+  padding: 10px;
+  background-color: #f0f0f0;
+  border-radius: 10px;
+  width: auto;
+  position: relative;
+  max-width: 80%;
+  box-shadow: 0 1px 1px 0 rgba(0, 0, 0, 0.2), 0 4px 1px 0 rgba(0, 0, 0, 0.1);
+}
+
+.ticket-comment.user-message {
+  background-color: #e2e5ee;
+  width: auto !important;
+  text-align: end;
+  margin-left: 20%;
+  margin-right: 10px;
+}
+
+.ticket-comment.user-message:hover .edit-icon {
+  visibility: visible;
+}
+
+.ticket-comment:hover .edit-icon {
+  visibility: visible;
+}
+
+.ticket-comment .ticket-timestamp {
+  font-size: 0.8em;
+  color: #888;
+}
+
+.ticket-comment-input input {
+  flex: 1;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #ddd;
+}
+
+.ticket-main-content {
+  flex: 1;
+  padding: 10px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 85vh;
+}
+
+.ticket-chat-list {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 52px;
+}
+
+.ticket-comment-input {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #ccc;
+  padding: 10px;
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: #fff;
+}
+
+.edit-icon {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  visibility: hidden;
+  cursor: pointer;
+}
+
+.edit-icon.user-edit-icon {
+  position: absolute;
+  top: 5px;
+  right: 98%;
+  visibility: hidden;
+  cursor: pointer;
+  align-items: start;
+}
+
+.edit-buttons {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+}
+
+.edit-buttons button {
+  margin-left: 5px;
+}
+
+.margin-top {
+  margin-top: 70px;
+}
+
+.status-dropdown {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 2px;
+  background-color: #f9f9f9;
+}
+
+.delete-button {
+  border-radius: 4px;
+  padding: 4px;
+  background-color: #FF917D;
+}
+
+.dd-style {
+  width: 100%;
+  /* Make full width of parent div */
+  margin-bottom: 2%;
+}
+
+.table-margin {
+  margin-top: 10%
+}
