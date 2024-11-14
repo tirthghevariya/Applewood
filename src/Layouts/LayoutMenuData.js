@@ -32,7 +32,7 @@ const Navdata = () => {
   const menuItems = [
     {
       id: "forms",
-      label: "Payout Form",
+      label: "Inches to mm",
       icon: "ri-file-list-3-line",
       link: "/payout-form",
       stateVariables: isForms,

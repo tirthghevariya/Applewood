@@ -258,7 +258,7 @@ table td {
 }
 
 .custom-tabs .nav-link.active {
-  background-color: #405189;
+  background-color: #217346;
   color: #fff;
 }
 
@@ -267,7 +267,7 @@ table td {
 }
 
 .badge-success {
-  background-color: #405189;
+  background-color: #217346;
 }
 
 /* src/components/TicketModule.css */
