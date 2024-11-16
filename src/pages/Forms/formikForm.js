@@ -66,7 +66,7 @@ const BasicElements = () => {
   const addColumn = () => {
     const newTableData = tableData.map((row, index) => {
       if (index === 0) {
-        return [...row, `Column ${row.length + 1}`];
+        return [...row, ""];
       }
       return [...row, ""];
     });
