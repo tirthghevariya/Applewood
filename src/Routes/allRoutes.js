@@ -6,7 +6,6 @@ import BasicElements from "../pages/Forms/formikForm";
 
 //login
 import Login from "../pages/Authentication/Login";
-import Logout from "../pages/Authentication/Logout";
 
 const authProtectedRoutes = [
   //charts
@@ -25,8 +24,6 @@ const authProtectedRoutes = [
 ];
 
 const publicRoutes = [
-  // Authentication Page
-  { path: "/logout", component: <Logout /> },
   { path: "/login", component: <Login /> },
 ];
 

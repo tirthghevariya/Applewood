@@ -4,7 +4,6 @@ import SimpleBar from "simplebar-react";
 //import logo
 import logoSm from "../assets/images/logo-sm.png";
 import logoLight from "../assets/images/logo-light.png";
-
 //Import Components
 import VerticalLayout from "./VerticalLayouts";
 import { Container } from "reactstrap";
@@ -45,12 +44,23 @@ const Sidebar = ({ layoutType }) => {
         <div className="navbar-brand-box">
           <Link to="/" className="logo logo-light mt-1">
             <span className="logo-sm">
-              <img src={logoSm} alt="" height="26" />
+              <img src={logoSm} alt="" height="40" />
             </span>
             <span className="logo-lg">
               <img src={logoLight} alt="" height="58" />
             </span>
-
+            {/* <span style={{ color: "#ff821c", fontFamily: "doto", fontSize: "40px" }}>
+              A
+            </span>
+            <span style={{ color: "#343186", fontFamily: "doto", fontSize: "28px" }}>
+              PPLE
+            </span>
+            <span style={{ color: "#ff821c", fontFamily: "doto", fontSize: "40px", marginLeft: "4px" }}>
+              W
+            </span>
+            <span style={{ color: "#343186", fontFamily: "doto", fontSize: "28px" }}>
+              OOD
+            </span> */}
           </Link>
           <button
             onClick={addEventListenerOnSmHoverMenu}

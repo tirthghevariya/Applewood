@@ -1,9 +1,6 @@
 /* eslint-disable no-const-assign */
 import React from "react";
 
-//import Components
-import ProfileDropdown from "../Components/Common/ProfileDropdown";
-
 import { changeSidebarVisibility } from "../slices/thunks";
 import { useSelector, useDispatch } from "react-redux";
 import { createSelector } from "reselect";
@@ -83,10 +80,6 @@ const Header = ({ headerClass }) => {
                   <span></span>
                 </span>
               </button>
-            </div>
-
-            <div className="d-flex align-items-center ">
-              <ProfileDropdown />
             </div>
           </div>
         </div>
