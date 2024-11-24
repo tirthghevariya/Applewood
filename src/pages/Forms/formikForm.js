@@ -197,7 +197,7 @@ const BasicElements = () => {
 
   return (
     <React.Fragment>
-      <div style={{ marginTop: "8%" }} className="page-content">
+      <div style={{ marginTop: "10%" }} className="page-content">
         <Button className="mb-2 me-2" color="primary" onClick={addColumn}>
           Add Column
         </Button>
@@ -217,22 +217,18 @@ const BasicElements = () => {
           className="mb-2 me-2"
           color="primary"
           id="addBatchButton" // Set a unique ID for the button
-          onClick={() => console.log("Button clicked")}
-        >
+          onClick={toggleModal}>
           Update Batch
         </Button>
 
         <Tooltip
-          placement="top" // You can change this to "right", "bottom", "left" as needed
+          placement="top"
           isOpen={tooltipOpen}
-          target="addBatchButton" // Tooltip will be shown when hovering over this button
-          toggle={toggleTooltip} // Toggle the tooltip visibility
+          target="addBatchButton"
+          toggle={toggleTooltip}
         >
           Batch Number: {batchNumber}
         </Tooltip>
-        {/* <Button className="mb-2 me-2" color="primary" onClick={toggleModal}>
-          Add Batch
-        </Button> */}
         <HotTable
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}
@@ -275,7 +271,7 @@ const BasicElements = () => {
           </Button>
         </ModalFooter>
       </Modal>
-    </React.Fragment>
+    </React.Fragment >
   );
 };
 
