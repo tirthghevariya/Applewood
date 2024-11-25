@@ -120,7 +120,13 @@ const BasicElements = () => {
   const convertValue = (value, batchNumber) => {
     if (typeof value === "string") {
       const parts = value.split(".");
-      if (parts.length > 2) {
+      if (parts.length === 2 && parts[1].length === 1) {
+        const wholeNumber = parseFloat(parts[0]) || 0;
+        const fractionalNumber = parseFloat(parts[1]) || 0;
+        const wholeCalc = wholeNumber * 25.4;
+        const fractionalCalc = fractionalNumber * 3.17;
+        return (wholeCalc + fractionalCalc + batchNumber).toFixed(2);
+      } else if (parts.length > 2) {
         const wholeNumber = parseFloat(parts[0]) || 0;
         const fractionalNumber = parseFloat(parts.slice(1).join(".")) || 0;
         const fractionalCalc = fractionalNumber * 3.17;
@@ -141,6 +147,27 @@ const BasicElements = () => {
     return batchNumber.toFixed(2);
   };
 
+
+  // const handleTableChange = (changes, source) => {
+  //   if (changes && source !== "loadData") {
+  //     setTableData((prevData) => {
+  //       const newData = JSON.parse(JSON.stringify(prevData));
+  //       changes.forEach(([row, col, oldValue, newValue]) => {
+  //         if (newValue !== oldValue) {
+  //           newData[row][col] = newValue;
+
+  //           if (col === 1) {
+  //             newData[row][5] = convertValue(newValue, batchNumber);
+  //           } else if (col === 0) {
+  //             newData[row][4] = convertValue(newValue, batchNumber);
+  //           }
+  //         }
+  //       });
+  //       return newData;
+  //     });
+  //   }
+  // };
+
   const handleTableChange = (changes, source) => {
     if (changes && source !== "loadData") {
       setTableData((prevData) => {
@@ -148,6 +175,12 @@ const BasicElements = () => {
         changes.forEach(([row, col, oldValue, newValue]) => {
           if (newValue !== oldValue) {
             newData[row][col] = newValue;
+
+            // Check if the column is the remark column (index 3)
+            if (col === 3 && remarkList.includes(newValue)) {
+              // Update the remark field if it matches one from the list
+              newData[row][col] = newValue;
+            }
 
             if (col === 1) {
               newData[row][5] = convertValue(newValue, batchNumber);
@@ -160,6 +193,10 @@ const BasicElements = () => {
       });
     }
   };
+
+
+
+
   const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
 
   const toggleModal = () => {
@@ -189,11 +226,31 @@ const BasicElements = () => {
         msg: "Batch Number updated successfully",
       }));
       toggleModal();
+      window.location.reload();
     } catch (error) {
       console.error("Error adding record to Firebase:", error);
       alert("Failed to add record.");
     }
   };
+
+
+  const [remarkList, setRemarkList] = useState([]);
+
+  useEffect(() => {
+    const fetchRemarks = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "remark"));
+        const remarks = querySnapshot.docs.map((doc) => doc.data().remark);
+        console.log("remarks", remarks)
+        setRemarkList(remarks);
+      } catch (error) {
+        console.error("Error fetching remarks:", error);
+      }
+    };
+    fetchRemarks();
+  }, []);
+
+
 
   return (
     <React.Fragment>
@@ -212,11 +269,13 @@ const BasicElements = () => {
         </Button>
         <Button className="mb-2 me-2" color="warning" onClick={printPDF}>
           Print PDF
+        </Button> <Button className="mb-2 me-2" color="primary" onClick={printPDF}>
+          Add Remark
         </Button>
         <Button
           className="mb-2 me-2"
           color="primary"
-          id="addBatchButton" // Set a unique ID for the button
+          id="addBatchButton"
           onClick={toggleModal}>
           Update Batch
         </Button>
@@ -229,6 +288,7 @@ const BasicElements = () => {
         >
           Batch Number: {batchNumber}
         </Tooltip>
+
         <HotTable
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}

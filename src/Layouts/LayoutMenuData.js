@@ -36,6 +36,13 @@ const Navdata = () => {
       icon: "ri-file-list-3-line",
       link: "/payout-form",
       stateVariables: isForms,
+    },
+    {
+      id: "forms",
+      label: "MM to MM",
+      icon: "ri-file-list-3-line",
+      link: "/payout-form",
+      stateVariables: isForms,
 
     }
   ];
