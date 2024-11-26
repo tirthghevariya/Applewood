@@ -41,6 +41,10 @@ const BasicElements = () => {
     fetchBatchNumber();
   }, []);
 
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileValue, setProfileValue] = useState("");
+
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [field1, setField1] = useState(tools.toString());
   const [field2, setField2] = useState(edge.toString());
@@ -147,27 +151,6 @@ const BasicElements = () => {
     return batchNumber.toFixed(2);
   };
 
-
-  // const handleTableChange = (changes, source) => {
-  //   if (changes && source !== "loadData") {
-  //     setTableData((prevData) => {
-  //       const newData = JSON.parse(JSON.stringify(prevData));
-  //       changes.forEach(([row, col, oldValue, newValue]) => {
-  //         if (newValue !== oldValue) {
-  //           newData[row][col] = newValue;
-
-  //           if (col === 1) {
-  //             newData[row][5] = convertValue(newValue, batchNumber);
-  //           } else if (col === 0) {
-  //             newData[row][4] = convertValue(newValue, batchNumber);
-  //           }
-  //         }
-  //       });
-  //       return newData;
-  //     });
-  //   }
-  // };
-
   const handleTableChange = (changes, source) => {
     if (changes && source !== "loadData") {
       setTableData((prevData) => {
@@ -176,13 +159,27 @@ const BasicElements = () => {
           if (newValue !== oldValue) {
             newData[row][col] = newValue;
 
-            // Check if the column is the remark column (index 3)
-            if (col === 3 && remarkList.includes(newValue)) {
-              // Update the remark field if it matches one from the list
-              newData[row][col] = newValue;
-            }
-
-            if (col === 1) {
+            if (col === 3) {
+              if (newValue && newValue.startsWith("fi")) {
+                newData[row][col] = "Figure";
+              } else if (newValue && newValue.startsWith("f")) {
+                newData[row][col] = "Fix";
+              } else if (newValue && newValue.startsWith("g")) {
+                newData[row][col] = "Glass";
+              } else if (newValue && newValue.startsWith("p")) {
+                newData[row][col] = "Profile";
+              } else if (newValue && newValue.startsWith("j")) {
+                newData[row][col] = "J Cross";
+              } else if (newValue && newValue.startsWith("d")) {
+                newData[row][col] = "D Cross";
+              } else if (newValue && newValue.startsWith("c")) {
+                newData[row][col] = "Cross";
+              } else if (newValue && newValue.startsWith("v")) {
+                newData[row][col] = "Vpar";
+              } else if (newValue && newValue.startsWith("n")) {
+                newData[row][col] = "Niche Cross";
+              }
+            } else if (col === 1) {
               newData[row][5] = convertValue(newValue, batchNumber);
             } else if (col === 0) {
               newData[row][4] = convertValue(newValue, batchNumber);
@@ -193,7 +190,6 @@ const BasicElements = () => {
       });
     }
   };
-
 
 
 
@@ -250,6 +246,26 @@ const BasicElements = () => {
     fetchRemarks();
   }, []);
 
+  const handleProfileSubmit = () => {
+    const value = parseFloat(profileValue);
+
+    if (isNaN(value)) {
+      alert("Please enter a valid number.");
+      return;
+    }
+
+    const updatedTableData = tableData.map((row, index) => {
+      if (index > 0 && row[3] === "Profile") {
+        const newHeight = (parseFloat(row[5]) || 0) - value;
+        row[5] = newHeight.toFixed(2);
+      }
+      return row;
+    });
+
+    setTableData(updatedTableData);
+    setIsProfileModalOpen(false);
+    setProfileValue("");
+  };
 
 
   return (
@@ -269,9 +285,14 @@ const BasicElements = () => {
         </Button>
         <Button className="mb-2 me-2" color="warning" onClick={printPDF}>
           Print PDF
-        </Button> <Button className="mb-2 me-2" color="primary" onClick={printPDF}>
-          Add Remark
         </Button>
+        <Button
+          className="mb-2 me-2"
+          color="primary"
+          onClick={() => setIsProfileModalOpen(true)}>
+          Profile
+        </Button>
+
         <Button
           className="mb-2 me-2"
           color="primary"
@@ -331,6 +352,29 @@ const BasicElements = () => {
           </Button>
         </ModalFooter>
       </Modal>
+
+
+      <Modal isOpen={isProfileModalOpen} toggle={() => setIsProfileModalOpen(false)}>
+        <ModalHeader toggle={() => setIsProfileModalOpen(false)}>Update Profile</ModalHeader>
+        <ModalBody>
+          <Label for="profileValue">Enter Profile Value:</Label>
+          <Input
+            type="number"
+            id="profileValue"
+            value={profileValue}
+            onChange={(e) => setProfileValue(e.target.value)}
+          />
+        </ModalBody>
+        <ModalFooter>
+          <Button color="secondary" onClick={() => setIsProfileModalOpen(false)}>
+            Cancel
+          </Button>
+          <Button color="primary" onClick={handleProfileSubmit}>
+            Submit
+          </Button>
+        </ModalFooter>
+      </Modal>
+
     </React.Fragment >
   );
 };
