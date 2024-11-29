@@ -24,6 +24,18 @@ const BasicElements = () => {
     ...Array(100).fill(["", "", "", "", "", "", ""]),
   ]);
 
+  const formatDateToDMY = (date) => {
+    const d = new Date(date);
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  };
+
+  const [date, setDate] = useState(formatDateToDMY(new Date()));
+  const [clientName, setClientName] = useState("");
+  const [book, setBook] = useState("");
+
   useEffect(() => {
     const fetchBatchNumber = async () => {
       try {
@@ -84,7 +96,11 @@ const BasicElements = () => {
   };
 
   const downloadExcel = () => {
-    const ws = XLSX.utils.aoa_to_sheet(tableData);
+    const ws = XLSX.utils.aoa_to_sheet([
+      [`Date: ${date}`, `Client: ${clientName}`, `Book: ${book}`],
+      [],
+      ...tableData,
+    ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     XLSX.writeFile(wb, "table_data.xlsx");
@@ -92,31 +108,65 @@ const BasicElements = () => {
 
   const downloadPDF = () => {
     const doc = new jsPDF();
-    doc.text("Table Data", 20, 10);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(`Date: ${date}`, 10, 10);
+    doc.text(`Client: ${clientName}`, 10, 20);
+    doc.text(`Book: ${book}`, 10, 30);
 
+    const filteredData = tableData
+      .slice(1)
+      .filter((row) => row.some((cell) => cell.trim() !== ""));
+    const pcsIndex = tableData[0].indexOf("PCS");
+    const totalPCS = filteredData.reduce((sum, row) => {
+      const pcsValue = parseFloat(row[pcsIndex]) || 0;
+      return sum + pcsValue;
+    }, 0);
+
+    const serialData = filteredData.map((row, index) => [index + 1, ...row]);
+    const headers = ["S. No", ...tableData[0]];
     doc.autoTable({
-      head: [tableData[0]],
-      body: tableData.slice(1),
-      startY: 20,
-      margin: { top: 20 },
+      head: [headers],
+      body: serialData,
+      startY: 40,
       styles: { fontSize: 10 },
-      theme: 'striped',
-      pageBreak: 'auto',
+      theme: "grid",
+      headStyles: { fillColor: [22, 160, 133] },
+      margin: { top: 40 },
+      didDrawCell: (data) => {
+        if (!data || !data.row || !data.cell) return;
+
+        const { table } = data;
+        const rowHeight = data.cell.height;
+        const rowY = data.row.y + rowHeight;
+
+        if (data.row.index !== data.table.body.length - 1) {
+          const startX = table.startX;
+          const endX = table.startX + table.width;
+          if (rowY && !isNaN(startX) && !isNaN(endX) && !isNaN(rowY)) {
+            doc.setLineWidth(0.1);
+            doc.line(startX, rowY, endX, rowY);
+          }
+        }
+      },
     });
-    const extraPages = 2;
-    for (let i = 0; i < extraPages; i++) {
-      doc.addPage();
-      doc.text(`Extra Page ${i + 1}`, 20, 10);
-    }
-    doc.save("table_data_with_extra_pages.pdf");
+    const finalY = doc.lastAutoTable.finalY + 10;
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
+    doc.save("table_data.pdf");
   };
+
+
 
   const printPDF = () => {
     const doc = new jsPDF();
-    doc.text("Table Data", 20, 10);
+    doc.text(`Date: ${date}`, 10, 10);
+    doc.text(`Client: ${clientName}`, 10, 20);
+    doc.text(`Book: ${book}`, 10, 30);
     doc.autoTable({
       head: [tableData[0]],
       body: tableData.slice(1),
+      startY: 40,
     });
     window.open(doc.output("bloburl"));
   };
@@ -129,18 +179,18 @@ const BasicElements = () => {
         const fractionalNumber = parseFloat(parts[1]) || 0;
         const wholeCalc = wholeNumber * 25.4;
         const fractionalCalc = fractionalNumber * 3.17;
-        return (wholeCalc + fractionalCalc + batchNumber).toFixed(2);
+        return (wholeCalc + fractionalCalc + batchNumber).toFixed(1);
       } else if (parts.length > 2) {
         const wholeNumber = parseFloat(parts[0]) || 0;
         const fractionalNumber = parseFloat(parts.slice(1).join(".")) || 0;
         const fractionalCalc = fractionalNumber * 3.17;
-        return (wholeNumber * 25.4 + fractionalCalc + batchNumber).toFixed(2);
+        return (wholeNumber * 25.4 + fractionalCalc + batchNumber).toFixed(1);
       } else if (parts.length === 2) {
         const wholeNumber = parseFloat(parts[0]) || 0;
         const fractionalNumber = parseFloat(`0.${parts[1]}`) || 0;
         const wholeCalc = wholeNumber * 25.4;
         const fractionalCalc = fractionalNumber * 3.17;
-        return (wholeCalc + fractionalCalc + batchNumber).toFixed(2);
+        return (wholeCalc + fractionalCalc + batchNumber).toFixed(1);
       }
     }
 
@@ -155,10 +205,25 @@ const BasicElements = () => {
     if (changes && source !== "loadData") {
       setTableData((prevData) => {
         const newData = JSON.parse(JSON.stringify(prevData));
+
         changes.forEach(([row, col, oldValue, newValue]) => {
           if (newValue !== oldValue) {
             newData[row][col] = newValue;
+            if (col === 0) {
+              if (!newValue || newValue.trim() === "") {
+                newData[row][4] = "";
+              } else {
+                newData[row][4] = convertValue(newValue, batchNumber);
+              }
+            }
 
+            if (col === 1) {
+              if (!newValue || newValue.trim() === "") {
+                newData[row][5] = "";
+              } else {
+                newData[row][5] = convertValue(newValue, batchNumber);
+              }
+            }
             if (col === 3) {
               if (newValue && newValue.startsWith("fi")) {
                 newData[row][col] = "Figure";
@@ -174,23 +239,27 @@ const BasicElements = () => {
                 newData[row][col] = "D Cross";
               } else if (newValue && newValue.startsWith("c")) {
                 newData[row][col] = "Cross";
-              } else if (newValue && newValue.startsWith("v")) {
-                newData[row][col] = "Vpar";
+              } else if (newValue && newValue.startsWith("u")) {
+                newData[row][col] = "Upar Cross";
               } else if (newValue && newValue.startsWith("n")) {
                 newData[row][col] = "Niche Cross";
+              } else if (newValue && newValue.startsWith("1")) {
+                newData[row][col] = "⬅️";
+              } else if (newValue && newValue.startsWith("2")) {
+                newData[row][col] = "⬇️";
+              } else if (newValue && newValue.startsWith("3")) {
+                newData[row][col] = "➡️";
+              } else if (newValue && newValue.startsWith("4")) {
+                newData[row][col] = "⬅️";
               }
-            } else if (col === 1) {
-              newData[row][5] = convertValue(newValue, batchNumber);
-            } else if (col === 0) {
-              newData[row][4] = convertValue(newValue, batchNumber);
             }
+            newData[row][6] = newData[row][2];
           }
         });
         return newData;
       });
     }
   };
-
 
 
   const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
@@ -229,23 +298,6 @@ const BasicElements = () => {
     }
   };
 
-
-  const [remarkList, setRemarkList] = useState([]);
-
-  useEffect(() => {
-    const fetchRemarks = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "remark"));
-        const remarks = querySnapshot.docs.map((doc) => doc.data().remark);
-        console.log("remarks", remarks)
-        setRemarkList(remarks);
-      } catch (error) {
-        console.error("Error fetching remarks:", error);
-      }
-    };
-    fetchRemarks();
-  }, []);
-
   const handleProfileSubmit = () => {
     const value = parseFloat(profileValue);
 
@@ -257,7 +309,7 @@ const BasicElements = () => {
     const updatedTableData = tableData.map((row, index) => {
       if (index > 0 && row[3] === "Profile") {
         const newHeight = (parseFloat(row[5]) || 0) - value;
-        row[5] = newHeight.toFixed(2);
+        row[5] = newHeight.toFixed(1);
       }
       return row;
     });
@@ -267,10 +319,48 @@ const BasicElements = () => {
     setProfileValue("");
   };
 
+  const handleDateChange = (e) => {
+    const inputDate = e.target.value;
+    const [year, month, day] = inputDate.split("-");
+    setDate(`${day}-${month}-${year}`);
+  };
+
 
   return (
     <React.Fragment>
+
+
       <div style={{ marginTop: "10%" }} className="page-content">
+
+        <div style={{ marginTop: "10%" }} className="page-content">
+          <div className="mb-3">
+            <Label for="dateInput">Date:</Label>
+            <Input
+              type="date"
+              id="dateInput"
+              value={date.split("-").reverse().join("-")}
+              onChange={handleDateChange}
+              className="mb-2"
+            />
+            <Label for="clientInput">Client Name:</Label>
+            <Input
+              type="text"
+              id="clientInput"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              className="mb-2"
+            />
+            <Label for="bookInput">Book:</Label>
+            <Input
+              type="text"
+              id="bookInput"
+              value={book}
+              onChange={(e) => setBook(e.target.value)}
+              className="mb-3"
+            />
+          </div>
+        </div>
+
         <Button className="mb-2 me-2" color="primary" onClick={addColumn}>
           Add Column
         </Button>
@@ -321,6 +411,7 @@ const BasicElements = () => {
           afterChange={handleTableChange}
         />
       </div>
+
       <Modal isOpen={isModalOpen} toggle={toggleModal}>
         <ModalHeader toggle={toggleModal}>Add Batch Number</ModalHeader>
         <ModalBody>
