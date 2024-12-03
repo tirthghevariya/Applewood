@@ -406,3 +406,7 @@ table td {
 .table-margin {
   margin-top: 10%
 }
+
+.align-page {
+  padding: 0px calc(1.5rem* 0.5) 0px calc(1.5rem* 0.5);
+}

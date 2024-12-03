@@ -42,7 +42,7 @@ const Login = () => {
     const userData = JSON.parse(localStorage.getItem("userData"));
 
     if (userData && userData.username) {
-      navigate("/payout-form");
+      navigate("/inches-to-mm");
     }
   }, [navigate]);
 
@@ -82,7 +82,7 @@ const Login = () => {
             // password: enteredPasswordHash,
           };
           localStorage.setItem("userData", JSON.stringify(userData));
-          navigate("/payout-form");
+          navigate("/inches-to-mm");
           resetForm();
         } else {
           dispatch(showToast({ type: "error", msg: "Access denied: Incorrect credentials" }));

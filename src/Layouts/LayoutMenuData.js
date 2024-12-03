@@ -5,28 +5,22 @@ const Navdata = () => {
 
   const history = useNavigate();
   //state data
-  const [isDashboard, setIsDashboard] = useState(false);
   const [isAuth, setIsAuth] = useState(false);
-  const [isPages, setIsPages] = useState(false);
   const [isForms, setIsForms] = useState(false);
-  const [iscurrentState, setIscurrentState] = useState("Dashboard");
+  const [iscurrentState, setIscurrentState] = useState(false);
 
   useEffect(() => {
     document.body.classList.remove("twocolumn-panel");
     if (iscurrentState !== "Auth") {
       setIsAuth(false);
     }
-    if (iscurrentState === "/payout-form") {
-      history("/payout-form");
+    if (iscurrentState === "/inches-to-mm") {
+      history("/inches-to-mm");
       document.body.classList.add("twocolumn-panel");
     }
   }, [
     history,
-    iscurrentState,
-    isDashboard,
     isAuth,
-    isPages,
-    isForms,
   ]);
 
   const menuItems = [
@@ -34,14 +28,21 @@ const Navdata = () => {
       id: "forms",
       label: "Inches to mm",
       icon: "ri-file-list-3-line",
-      link: "/payout-form",
+      link: "/inches-to-mm",
       stateVariables: isForms,
     },
     {
       id: "forms",
       label: "MM to MM",
       icon: "ri-file-list-3-line",
-      link: "/payout-form",
+      link: "/mm-to-mm",
+      stateVariables: isForms,
+    },
+    {
+      id: "forms",
+      label: "Client Menu",
+      icon: "ri-file-list-3-line",
+      link: "/client-menu",
       stateVariables: isForms,
 
     }

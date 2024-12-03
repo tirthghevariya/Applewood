@@ -11,7 +11,7 @@ export const loginUser = (user, history) => async (dispatch) => {
     //   email: user.email,
     //   password: user.password,
     // });
-    history("/payout-form");
+    history("/inches-to-mm");
 
     // let data = await response;
 
