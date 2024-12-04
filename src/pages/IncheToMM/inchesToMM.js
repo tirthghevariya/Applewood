@@ -126,6 +126,77 @@ const InchesToMM = () => {
     XLSX.writeFile(wb, "table_data.xlsx");
   };
 
+  const workPDF = () => {
+    const remarkOrder = [
+      "fix", 
+      "blank", 
+      "Profile", 
+      "1", 
+      "2", 
+      "3", 
+      "5", 
+      "Glass", 
+      "Figure", 
+      "Cross", 
+      "J Cross", 
+      "D Cross", 
+      "Upar Cross", 
+      "Niche Cross"
+    ];
+  
+    // Sort data based on remark priority
+    const sortedData = tableData.slice(1).sort((a, b) => {
+      const remarkA = a[3] || ""; // Assuming the "REMARK" column is index 3
+      const remarkB = b[3] || "";
+  
+      const orderA = remarkOrder.indexOf(remarkA.toLowerCase());
+      const orderB = remarkOrder.indexOf(remarkB.toLowerCase());
+  
+      return orderA - orderB;
+    });
+  
+    // Rebuild table data with headers
+    const sortedTableData = [
+      tableData[0], // Keep header row as it is
+      ...sortedData, // Add the sorted data
+    ];
+  
+    // Create Excel sheet from the sorted data
+    const ws = XLSX.utils.aoa_to_sheet([
+      [`Date: ${date}`, `Client: ${clientName}`, `Book: ${book}`],
+      [],
+      ...sortedTableData,
+    ]);
+  
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+  
+    // Trigger the file download
+    XLSX.writeFile(wb, "sorted_table_data.xlsx");
+  };
+  
+  
+  
+  
+
+ const normalPDF = () => {
+  // Rearrange tableData columns to move "REMARK" to the last position
+  const rearrangedTableData = tableData.map((row) => {
+    const [weight, height, pcs, remark, weightMM, heightMM, pcsFinal] = row;
+    return [weight, height, pcs, weightMM, heightMM, pcsFinal, remark];
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet([
+    [`Date: ${date}`, `Client: ${clientName}`, `Book: ${book}`],
+    [],
+    ...rearrangedTableData,
+  ]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
+  XLSX.writeFile(wb, "table_data.xlsx");
+};
+
+
   const fetchImageAsBase64 = async (imagePath) => {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -144,150 +215,7 @@ const InchesToMM = () => {
     });
   };
 
-  const downloadWorkPDF = async () => {
-    if (!clientName) {
-      dispatch(
-        showToast({
-          type: "error",
-          msg: "Please enter client name",
-        })
-      );
-    } else {
-      const safeTableData = Array.isArray(tableData)
-        ? tableData
-        : [
-          [
-            "WEIGHT",
-            "HEIGHT",
-            "PCS",
-            "REMARK",
-            "WEIGHT(MM)",
-            "HEIGHT(MM)",
-            "PCS",
-          ],
-        ];
-
-      const doc = new jsPDF();
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-
-      doc.text(`Date: ${date}`, 10, 10);
-      doc.text(`Client: ${clientName}`, 10, 20);
-      doc.text(`Book: ${book}`, 10, 30);
-
-      const selectedColorImage =
-        colorImages[selectedColor.replace(" ", "_")] || null;
-      let colorImageBase64 = null;
-      if (selectedColorImage) {
-        colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
-      }
-
-      let imageYPosition = 0;
-
-      if (colorImageBase64) {
-        const imageWidth = 50;
-        const imageHeight = 70;
-        const imageXPosition = 130;
-
-        doc.addImage(
-          colorImageBase64,
-          "PNG",
-          imageXPosition,
-          0,
-          imageWidth,
-          imageHeight
-        );
-
-        const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-        doc.text(colorCodeText, imageXPosition, imageHeight + 5);
-      }
-
-      let tableStartY = 40;
-      if (colorImageBase64) {
-        tableStartY = imageYPosition + 80;
-      }
-
-      const filteredData = safeTableData
-        .slice(1)
-        .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
-
-      const pcsIndex = safeTableData[0].indexOf("PCS");
-
-      const totalPCS = filteredData.reduce((sum, row) => {
-        const pcsValue = parseFloat(row[pcsIndex]) || 0;
-        return sum + pcsValue;
-      }, 0);
-
-      const arrowImages = {
-        1: await fetchImageAsBase64(leftArrow),
-        2: await fetchImageAsBase64(downArrow),
-        3: await fetchImageAsBase64(rightArrow),
-        5: await fetchImageAsBase64(upArrow),
-      };
-
-      const processedData = filteredData.map((row) => {
-        return row.map((cell) => {
-          if (["1", "2", "3", "5"].includes(cell)) {
-            return cell;
-          }
-          return cell;
-        });
-      });
-      const serialData = processedData.map((row, index) => [index + 1, ...row]);
-
-      const headers = ["S. No", ...safeTableData[0]];
-
-      doc.autoTable({
-        head: [headers],
-        body: serialData,
-        startY: tableStartY,
-        styles: { fontSize: 10 },
-        theme: "grid",
-        headStyles: { fillColor: [22, 160, 133] },
-        margin: { top: tableStartY },
-        didDrawCell: (data) => {
-          if (!data || !data.row || !data.cell) return;
-
-          const cellText = data.cell.text[0];
-          const arrowImagePath = arrowImages[cellText];
-
-          if (arrowImagePath && data.column.index === 4) {
-            doc.setFillColor(255, 255, 255);
-            doc.rect(
-              data.cell.x,
-              data.cell.y,
-              data.cell.width,
-              data.cell.height,
-              "F"
-            );
-
-            const cellWidth = data.cell.width;
-            const cellHeight = data.cell.height;
-            const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
-            const imageWidth = maxImageSize;
-            const imageHeight = maxImageSize;
-
-            doc.addImage(
-              arrowImagePath,
-              "PNG",
-              data.cell.x + (cellWidth - imageWidth) / 2,
-              data.cell.y + (cellHeight - imageHeight) / 2,
-              imageWidth,
-              imageHeight
-            );
-          }
-        },
-      });
-
-      const finalY = doc.lastAutoTable.finalY + 10;
-      doc.setFont("helvetica", "bold");
-      doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
-
-      const sanitizedClientName = clientName.toString().toLowerCase();
-      doc.save(`${sanitizedClientName}_${date}.pdf`);
-    }
-  };
-  const downloadNormalPDF = async () => {
+  const downloadPDF = async () => {
     if (!clientName) {
       dispatch(
         showToast({
@@ -439,10 +367,12 @@ const InchesToMM = () => {
           msg: "Please enter client name",
         })
       );
-    } else {
-      const safeTableData = Array.isArray(tableData)
-        ? tableData
-        : [
+      return;
+    }
+  
+    const safeTableData = Array.isArray(tableData)
+      ? tableData
+      : [
           [
             "WEIGHT",
             "HEIGHT",
@@ -453,125 +383,86 @@ const InchesToMM = () => {
             "PCS",
           ],
         ];
-
-      const doc = new jsPDF();
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-
-      doc.text(`Date: ${date}`, 10, 10);
-      doc.text(`Client: ${clientName}`, 10, 20);
-      doc.text(`Book: ${book}`, 10, 30);
-
-      const selectedColorImage =
-        colorImages[selectedColor.replace(" ", "_")] || null;
-      let colorImageBase64 = null;
-      if (selectedColorImage) {
-        colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
-      }
-
-      let imageYPosition = 0;
-
-      if (colorImageBase64) {
-        const imageWidth = 50;
-        const imageHeight = 70;
-        const imageXPosition = 130;
-
-        doc.addImage(
-          colorImageBase64,
-          "PNG",
-          imageXPosition,
-          0,
-          imageWidth,
-          imageHeight
-        );
-
-        const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-        doc.text(colorCodeText, imageXPosition, imageHeight + 5);
-      }
-
-      let tableStartY = 40;
-      if (colorImageBase64) {
-        tableStartY = imageYPosition + 80;
-      }
-
-      const filteredData = safeTableData
-        .slice(1)
-        .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
-
-      const pcsIndex = safeTableData[0].indexOf("PCS");
-
-      const totalPCS = filteredData.reduce((sum, row) => {
-        const pcsValue = parseFloat(row[pcsIndex]) || 0;
-        return sum + pcsValue;
-      }, 0);
-
-      const arrowImages = {
-        1: await fetchImageAsBase64(leftArrow),
-        2: await fetchImageAsBase64(downArrow),
-        3: await fetchImageAsBase64(rightArrow),
-        5: await fetchImageAsBase64(upArrow),
-      };
-
-      const processedData = filteredData.map((row) => {
-        return row.map((cell) => {
-          if (["1", "2", "3", "5"].includes(cell)) {
-            return cell;
-          }
-          return cell;
-        });
-      });
-      const serialData = processedData.map((row, index) => [index + 1, ...row]);
-
-      const headers = ["S. No", ...safeTableData[0]];
-
-      doc.autoTable({
-        head: [headers],
-        body: serialData,
-        startY: tableStartY,
-        styles: { fontSize: 10 },
-        theme: "grid",
-        headStyles: { fillColor: [22, 160, 133] },
-        margin: { top: tableStartY },
-        didDrawCell: (data) => {
-          if (!data || !data.row || !data.cell) return;
-
-          const cellText = data.cell.text[0];
-          const arrowImagePath = arrowImages[cellText];
-
-          if (arrowImagePath && data.column.index === 4) {
-            doc.setFillColor(255, 255, 255);
-            doc.rect(
-              data.cell.x,
-              data.cell.y,
-              data.cell.width,
-              data.cell.height,
-              "F"
-            );
-
-            const cellWidth = data.cell.width;
-            const cellHeight = data.cell.height;
-            const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
-            const imageWidth = maxImageSize;
-            const imageHeight = maxImageSize;
-
-            doc.addImage(
-              arrowImagePath,
-              "PNG",
-              data.cell.x + (cellWidth - imageWidth) / 2,
-              data.cell.y + (cellHeight - imageHeight) / 2,
-              imageWidth,
-              imageHeight
-            );
-          }
-        },
-      });
-
-      const finalY = doc.lastAutoTable.finalY + 10;
-      doc.setFont("helvetica", "bold");
-      doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
-      window.open(doc.output("bloburl"));
+  
+    // Reorder headers to move REMARK to the last column
+    const headers = [...safeTableData[0]];
+    const remarkIndex = headers.indexOf("REMARK");
+    if (remarkIndex > -1) {
+      headers.splice(remarkIndex, 1); // Remove REMARK
+      headers.push("REMARK"); // Add REMARK at the end
     }
+  
+    // Reorder each row to match the new header order
+    const reorderedData = safeTableData.slice(1).map((row) => {
+      const newRow = [...row];
+      if (remarkIndex > -1) {
+        const remarkValue = newRow[remarkIndex];
+        newRow.splice(remarkIndex, 1); // Remove REMARK
+        newRow.push(remarkValue); // Add REMARK at the end
+      }
+      return newRow;
+    });
+  
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+  
+    doc.text(`Date: ${date}`, 10, 10);
+    doc.text(`Client: ${clientName}`, 10, 20);
+    doc.text(`Book: ${book}`, 10, 30);
+  
+    const selectedColorImage =
+      colorImages[selectedColor.replace(" ", "_")] || null;
+    let colorImageBase64 = null;
+    if (selectedColorImage) {
+      colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
+    }
+  
+    let imageYPosition = 0;
+  
+    if (colorImageBase64) {
+      const imageWidth = 50;
+      const imageHeight = 70;
+      const imageXPosition = 130;
+  
+      doc.addImage(
+        colorImageBase64,
+        "PNG",
+        imageXPosition,
+        0,
+        imageWidth,
+        imageHeight
+      );
+  
+      const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
+      doc.text(colorCodeText, imageXPosition, imageHeight + 5);
+    }
+  
+    let tableStartY = 40;
+    if (colorImageBase64) {
+      tableStartY = imageYPosition + 80;
+    }
+  
+    const serialData = reorderedData.map((row, index) => [index + 1, ...row]);
+    const finalHeaders = ["S. No", ...headers];
+  
+    doc.autoTable({
+      head: [finalHeaders],
+      body: serialData,
+      startY: tableStartY,
+      styles: { fontSize: 10 },
+      theme: "grid",
+      headStyles: { fillColor: [22, 160, 133] },
+      margin: { top: tableStartY },
+    });
+  
+    const finalY = doc.lastAutoTable.finalY + 10;
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total PCS: ${serialData.reduce((sum, row) => sum + (parseFloat(row[3]) || 0), 0)}`, 10, finalY);
+  
+    window.open(doc.output("bloburl"));
   };
+  
 
   const convertValue = (value, batchNumber) => {
     if (typeof value === "string") {
@@ -602,6 +493,53 @@ const InchesToMM = () => {
 
     return batchNumber.toFixed(2);
   };
+
+  const importFile = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx, .xls";
+    input.style.display = "none"; // Hidden input
+  
+    input.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+  
+      const reader = new FileReader();
+  
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert to array of arrays
+  
+        if (jsonData.length > 1) {
+          const [, ...rows] = jsonData; // Skip the first row (headers) and get the remaining rows
+          const updatedData = [
+            ...tableData.slice(0, 1), // Keep the original header row
+            ...rows, // Add the rows from the Excel file
+            ...Array(100 - rows.length).fill(["", "", "", "", "", "", ""]), // Fill remaining rows with empty data
+          ];
+  
+          setTableData(updatedData);
+  
+          // Trigger handleTableChange for imported rows
+          rows.forEach((rowData, rowIndex) => {
+            const row = rowIndex + 1; // Adjust for headers
+            rowData.forEach((cellValue, colIndex) => {
+              handleTableChange([[row, colIndex, tableData[row]?.[colIndex], cellValue]], "import");
+            });
+          });
+        }
+      };
+  
+      reader.readAsArrayBuffer(file);
+    });
+  
+    // Trigger file input click
+    input.click();
+  };
+  
 
   const handleTableChange = (changes, source) => {
     if (changes && source !== "loadData") {
@@ -862,14 +800,17 @@ const InchesToMM = () => {
         <Button className="mb-2 ml-2 me-2" color="primary" onClick={addRow}>
           Add Row
         </Button>
-        <Button className="mb-2 me-2" color="success" onClick={downloadExcel}>
+        {/* <Button className="mb-2 me-2" color="success" onClick={downloadExcel}>
           Download Excel
+        </Button> */}
+        <Button className="mb-2 me-2" color="success" onClick={workPDF}>
+         Work PDF
         </Button>
-        <Button className="mb-2 me-2" color="info" onClick={downloadWorkPDF}>
-          Download work PDF
+        <Button className="mb-2 me-2" color="success" onClick={normalPDF}>
+         Normal PDF
         </Button>
-        <Button className="mb-2 me-2" color="info" onClick={downloadNormalPDF}>
-          Download normal PDF
+        <Button className="mb-2 me-2" color="info" onClick={downloadPDF}>
+          Download PDF
         </Button>
         <Button className="mb-2 me-2" color="warning" onClick={printPDF}>
           Print PDF
@@ -889,6 +830,14 @@ const InchesToMM = () => {
           onClick={toggleModal}
         >
           Update Batch
+        </Button>
+        <Button
+          className="mb-2 me-2"
+         color="success"
+          id="addBatchButton"
+          onClick={importFile}
+        >
+          Import
         </Button>
 
         <Tooltip
