@@ -125,7 +125,7 @@ const InchesToMM = () => {
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     XLSX.writeFile(wb, "table_data.xlsx");
   };
-  
+
   const workPDF = async () => {
     if (!clientName) {
       dispatch(
@@ -136,43 +136,46 @@ const InchesToMM = () => {
       );
       return;
     }
-  
-    // Ensure tableData has a default structure
+
     const safeTableData = Array.isArray(tableData)
       ? tableData
-      : [
-          [
-            "WEIGHT",
-            "HEIGHT",
-            "PCS",
-            "REMARK",
-            "WEIGHT(MM)",
-            "HEIGHT(MM)",
-            "PCS(FINAL)",
-          ],
-        ];
-  
-    // Rearrange tableData columns to move "REMARK" to the last position
+      : [["WEIGHT", "HEIGHT", "PCS", "REMARK", "WEIGHT(MM)", "HEIGHT(MM)", "PCS(FINAL)"]];
+
+    // Rearrange headers to move "REMARK" to the end
     const headers = [...safeTableData[0]];
     const remarkIndex = headers.indexOf("REMARK");
+
     if (remarkIndex > -1) {
-      headers.splice(remarkIndex, 1);
-      headers.push("REMARK");
+      headers.splice(remarkIndex, 1); // Remove "REMARK"
+      headers.push("REMARK"); // Add "REMARK" to the end
     }
-  
+
+    // Reorder rows based on the new header order
     const reorderedData = safeTableData.slice(1).map((row) => {
+      const remarkValue = row[remarkIndex];
       const newRow = [...row];
-      if (remarkIndex > -1) {
-        const remarkValue = newRow[remarkIndex];
-        newRow.splice(remarkIndex, 1);
-        newRow.push(remarkValue);
-      }
+      newRow.splice(remarkIndex, 1); // Remove "REMARK"
+      newRow.push(remarkValue); // Add "REMARK" to the end
       return newRow;
     });
-  
-    // Filter out empty rows from serialData
-    const filteredData = reorderedData.filter((row) => row.some((cell) => cell !== ""));
-  
+
+    const sortOrder = [
+      "fix", "", "profile", "1", "2", "3", "5",
+      "glass", "figure", "cross", "j cross",
+      "d cross", "upar cross", "niche cross"
+    ];
+
+    const orderedData = reorderedData.sort((a, b) => {
+      const remarkA = (a[headers.indexOf("REMARK")] || "").toLowerCase();
+      const remarkB = (b[headers.indexOf("REMARK")] || "").toLowerCase();
+      const indexA = sortOrder.indexOf(remarkA) > -1 ? sortOrder.indexOf(remarkA) : sortOrder.length;
+      const indexB = sortOrder.indexOf(remarkB) > -1 ? sortOrder.indexOf(remarkB) : sortOrder.length;
+      return indexA - indexB;
+    });
+
+    // Remove empty rows
+    const filteredData = orderedData.filter((row) => row.some((cell) => cell !== ""));
+
     // Fetch arrow images as base64
     const arrowImages = {
       1: await fetchImageAsBase64(leftArrow),
@@ -180,53 +183,34 @@ const InchesToMM = () => {
       3: await fetchImageAsBase64(rightArrow),
       5: await fetchImageAsBase64(upArrow),
     };
-  
-    // Initialize jsPDF
+
     const doc = new jsPDF();
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-  
+
     // Add document metadata
     doc.text(`Date: ${date}`, 10, 10);
     doc.text(`Client: ${clientName}`, 10, 20);
     doc.text(`Book: ${book}`, 10, 30);
-    const selectedColorImage =
-      colorImages[selectedColor.replace(" ", "_")] || null;
+
+    const selectedColorImage = colorImages[selectedColor.replace(" ", "_")] || null;
     let colorImageBase64 = null;
+
     if (selectedColorImage) {
       colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
     }
-  
-    let imageYPosition = 0;
-  
-    if (colorImageBase64) {
-      const imageWidth = 50;
-      const imageHeight = 70;
-      const imageXPosition = 130;
-  
-      doc.addImage(
-        colorImageBase64,
-        "PNG",
-        imageXPosition,
-        0,
-        imageWidth,
-        imageHeight
-      );
-  
-      const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-      doc.text(colorCodeText, imageXPosition, imageHeight + 5);
-    }
-  
+
     let tableStartY = 40;
     if (colorImageBase64) {
-      tableStartY = imageYPosition + 80;
+      doc.addImage(colorImageBase64, "PNG", 130, 0, 50, 70);
+      tableStartY = 80;
     }
-  
-    // Add serial numbers and prepare the data for rendering
+
+    // Prepare the final data for rendering
     const serialData = filteredData.map((row, index) => [index + 1, ...row]);
     const finalHeaders = ["S. No", ...headers];
-  
-    // Render table with custom handling for the "REMARK" column
+
+    // Render table
     doc.autoTable({
       head: [finalHeaders],
       body: serialData,
@@ -236,60 +220,50 @@ const InchesToMM = () => {
       headStyles: { fillColor: [22, 160, 133] },
       didDrawCell: (data) => {
         if (!data || !data.row || !data.cell) return;
-  
-        // Check if the cell is in the REMARK column
-        const cellText = data.cell.text[0];
-        const remarkImage = arrowImages[cellText];
-  
-        if (remarkImage && data.column.index === finalHeaders.length - 1) {
-          // Clear the cell content and add the image
-          doc.setFillColor(255, 255, 255);
-          doc.rect(
-            data.cell.x,
-            data.cell.y,
-            data.cell.width,
-            data.cell.height,
-            "F"
-          );
-  
-          // Calculate image size and position
-          const cellWidth = data.cell.width;
-          const cellHeight = data.cell.height;
-          const maxImageSize = Math.min(cellWidth, cellHeight) - 4; // Padding of 2px on all sides
-          const imageWidth = maxImageSize;
-          const imageHeight = maxImageSize;
-  
-          doc.addImage(
-            remarkImage,
-            "PNG",
-            data.cell.x + (cellWidth - imageWidth) / 2,
-            data.cell.y + (cellHeight - imageHeight) / 2,
-            imageWidth,
-            imageHeight
-          );
+
+        // Get the "REMARK" column index
+        const remarkColumnIndex = finalHeaders.indexOf("REMARK");
+
+        // If the current cell is in the REMARK column
+        if (data.column.index === remarkColumnIndex) {
+          const cellText = data.cell.raw; // Use raw data, not formatted text
+          const remarkImage = arrowImages[cellText]; // Match the raw cell value with arrow images
+
+          if (remarkImage) {
+            doc.setFillColor(255, 255, 255); // Clear the cell content
+            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
+
+            // Calculate image dimensions
+            const cellWidth = data.cell.width;
+            const cellHeight = data.cell.height;
+            const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
+            const imageWidth = maxImageSize;
+            const imageHeight = maxImageSize;
+            doc.addImage(
+              remarkImage,
+              "PNG",
+              data.cell.x + (cellWidth - imageWidth) / 2,
+              data.cell.y + (cellHeight - imageHeight) / 2,
+              imageWidth,
+              imageHeight
+            );
+          }
         }
       },
     });
-  
-    // Calculate and display total PCS
+
     const pcsIndex = headers.indexOf("PCS");
     const totalPCS = serialData.reduce((sum, row) => {
-      const pcsValue = parseFloat(row[pcsIndex + 1]) || 0; // Adjust for "S. No" column
+      const pcsValue = parseFloat(row[pcsIndex + 1]) || 0;
       return sum + pcsValue;
     }, 0);
-  
+
     const finalY = doc.lastAutoTable.finalY + 10;
-    doc.setFont("helvetica", "bold");
     doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
-  
-    // Open the PDF in a new browser tab
-    // window.open(doc.output("bloburl"));
-    doc.save("work.pdf");
+
+    const sanitizedClientName = clientName.toString().toLowerCase();
+    doc.save(`${sanitizedClientName}${date}.pdf`);
   };
-    
-  
-
-
 
   const normalPDF = async () => {
     if (!clientName) {
@@ -301,30 +275,27 @@ const InchesToMM = () => {
       );
       return;
     }
-  
-    // Ensure tableData has a default structure
     const safeTableData = Array.isArray(tableData)
       ? tableData
       : [
-          [
-            "WEIGHT",
-            "HEIGHT",
-            "PCS",
-            "REMARK",
-            "WEIGHT(MM)",
-            "HEIGHT(MM)",
-            "PCS(FINAL)",
-          ],
-        ];
-  
-    // Rearrange tableData columns to move "REMARK" to the last position
+        [
+          "WEIGHT",
+          "HEIGHT",
+          "PCS",
+          "REMARK",
+          "WEIGHT(MM)",
+          "HEIGHT(MM)",
+          "PCS(FINAL)",
+        ],
+      ];
+
     const headers = [...safeTableData[0]];
     const remarkIndex = headers.indexOf("REMARK");
     if (remarkIndex > -1) {
       headers.splice(remarkIndex, 1);
       headers.push("REMARK");
     }
-  
+
     const reorderedData = safeTableData.slice(1).map((row) => {
       const newRow = [...row];
       if (remarkIndex > -1) {
@@ -334,24 +305,18 @@ const InchesToMM = () => {
       }
       return newRow;
     });
-  
-    // Filter out empty rows from serialData
     const filteredData = reorderedData.filter((row) => row.some((cell) => cell !== ""));
-  
-    // Fetch arrow images as base64
+
     const arrowImages = {
       1: await fetchImageAsBase64(leftArrow),
       2: await fetchImageAsBase64(downArrow),
       3: await fetchImageAsBase64(rightArrow),
       5: await fetchImageAsBase64(upArrow),
     };
-  
-    // Initialize jsPDF
+
     const doc = new jsPDF();
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-  
-    // Add document metadata
     doc.text(`Date: ${date}`, 10, 10);
     doc.text(`Client: ${clientName}`, 10, 20);
     doc.text(`Book: ${book}`, 10, 30);
@@ -361,14 +326,14 @@ const InchesToMM = () => {
     if (selectedColorImage) {
       colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
     }
-  
+
     let imageYPosition = 0;
-  
+
     if (colorImageBase64) {
       const imageWidth = 50;
       const imageHeight = 70;
       const imageXPosition = 130;
-  
+
       doc.addImage(
         colorImageBase64,
         "PNG",
@@ -377,21 +342,17 @@ const InchesToMM = () => {
         imageWidth,
         imageHeight
       );
-  
+
       const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
       doc.text(colorCodeText, imageXPosition, imageHeight + 5);
     }
-  
+
     let tableStartY = 40;
     if (colorImageBase64) {
       tableStartY = imageYPosition + 80;
     }
-  
-    // Add serial numbers and prepare the data for rendering
     const serialData = filteredData.map((row, index) => [index + 1, ...row]);
     const finalHeaders = ["S. No", ...headers];
-  
-    // Render table with custom handling for the "REMARK" column
     doc.autoTable({
       head: [finalHeaders],
       body: serialData,
@@ -401,13 +362,10 @@ const InchesToMM = () => {
       headStyles: { fillColor: [22, 160, 133] },
       didDrawCell: (data) => {
         if (!data || !data.row || !data.cell) return;
-  
-        // Check if the cell is in the REMARK column
         const cellText = data.cell.text[0];
         const remarkImage = arrowImages[cellText];
-  
+
         if (remarkImage && data.column.index === finalHeaders.length - 1) {
-          // Clear the cell content and add the image
           doc.setFillColor(255, 255, 255);
           doc.rect(
             data.cell.x,
@@ -416,14 +374,12 @@ const InchesToMM = () => {
             data.cell.height,
             "F"
           );
-  
-          // Calculate image size and position
           const cellWidth = data.cell.width;
           const cellHeight = data.cell.height;
-          const maxImageSize = Math.min(cellWidth, cellHeight) - 4; // Padding of 2px on all sides
+          const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
           const imageWidth = maxImageSize;
           const imageHeight = maxImageSize;
-  
+
           doc.addImage(
             remarkImage,
             "PNG",
@@ -435,29 +391,18 @@ const InchesToMM = () => {
         }
       },
     });
-  
-    // Calculate and display total PCS
     const pcsIndex = headers.indexOf("PCS");
     const totalPCS = serialData.reduce((sum, row) => {
-      const pcsValue = parseFloat(row[pcsIndex + 1]) || 0; // Adjust for "S. No" column
+      const pcsValue = parseFloat(row[pcsIndex + 1]) || 0;
       return sum + pcsValue;
     }, 0);
-  
+
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFont("helvetica", "bold");
     doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
-  
-    // Open the PDF in a new browser tab
-    // window.open(doc.output("bloburl"));
-    doc.save("normal.pdf");
-
+    const sanitizedClientName = clientName.toString().toLowerCase();
+    doc.save(`${sanitizedClientName}${date}.pdf`);
   };
-  
-  
-
-
-
-
 
   const fetchImageAsBase64 = async (imagePath) => {
     return new Promise((resolve, reject) => {
@@ -631,21 +576,21 @@ const InchesToMM = () => {
       );
       return;
     }
-  
+
     const safeTableData = Array.isArray(tableData)
       ? tableData
       : [
-          [
-            "WEIGHT",
-            "HEIGHT",
-            "PCS",
-            "REMARK",
-            "WEIGHT(MM)",
-            "HEIGHT(MM)",
-            "PCS",
-          ],
-        ];
-  
+        [
+          "WEIGHT",
+          "HEIGHT",
+          "PCS",
+          "REMARK",
+          "WEIGHT(MM)",
+          "HEIGHT(MM)",
+          "PCS",
+        ],
+      ];
+
     // Reorder headers to move REMARK to the last column
     const headers = [...safeTableData[0]];
     const remarkIndex = headers.indexOf("REMARK");
@@ -653,7 +598,7 @@ const InchesToMM = () => {
       headers.splice(remarkIndex, 1); // Remove REMARK
       headers.push("REMARK"); // Add REMARK at the end
     }
-  
+
     // Reorder each row to match the new header order
     const reorderedData = safeTableData.slice(1).map((row) => {
       const newRow = [...row];
@@ -664,13 +609,13 @@ const InchesToMM = () => {
       }
       return newRow;
     });
-  
+
     // Filter out rows that have all empty fields
     const filteredData = reorderedData.filter((row) => row.some(cell => cell.trim() !== ""));
-  
+
     // Limit to the first 7 rows
     const limitedData = filteredData.slice(0, 7);
-  
+
     // Preload arrow images as base64
     const arrowImages = {
       "1": await fetchImageAsBase64(leftArrow),
@@ -678,29 +623,29 @@ const InchesToMM = () => {
       "3": await fetchImageAsBase64(rightArrow),
       "5": await fetchImageAsBase64(upArrow),
     };
-  
+
     const doc = new jsPDF();
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-  
+
     doc.text(`Date: ${date}`, 10, 10);
     doc.text(`Client: ${clientName}`, 10, 20);
     doc.text(`Book: ${book}`, 10, 30);
-  
+
     const selectedColorImage =
       colorImages[selectedColor.replace(" ", "_")] || null;
     let colorImageBase64 = null;
     if (selectedColorImage) {
       colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
     }
-  
+
     let imageYPosition = 0;
-  
+
     if (colorImageBase64) {
       const imageWidth = 50;
       const imageHeight = 70;
       const imageXPosition = 130;
-  
+
       doc.addImage(
         colorImageBase64,
         "PNG",
@@ -709,20 +654,20 @@ const InchesToMM = () => {
         imageWidth,
         imageHeight
       );
-  
+
       const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
       doc.text(colorCodeText, imageXPosition, imageHeight + 5);
     }
-  
+
     let tableStartY = 40;
     if (colorImageBase64) {
       tableStartY = imageYPosition + 80;
     }
-  
+
     const serialData = limitedData.map((row, index) => [index + 1, ...row]);
-  
+
     const finalHeaders = ["S. No", ...headers];
-  
+
     doc.autoTable({
       head: [finalHeaders],
       body: serialData,
@@ -732,12 +677,12 @@ const InchesToMM = () => {
       headStyles: { fillColor: [22, 160, 133] },
       didDrawCell: (data) => {
         if (!data || !data.row || !data.cell) return;
-  
+
         const remarkColumnIndex = finalHeaders.indexOf("REMARK");
         if (data.column.index === remarkColumnIndex) {
           const cellText = data.cell.text[0];
           const remarkImage = arrowImages[cellText];
-  
+
           if (remarkImage) {
             // Clear cell content and add the image
             doc.setFillColor(255, 255, 255);
@@ -748,14 +693,14 @@ const InchesToMM = () => {
               data.cell.height,
               "F"
             );
-  
+
             // Calculate image size and position
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
             const maxImageSize = Math.min(cellWidth, cellHeight) - 4; // Padding of 2px on all sides
             const imageWidth = maxImageSize;
             const imageHeight = maxImageSize;
-  
+
             doc.addImage(
               remarkImage,
               "PNG",
@@ -768,7 +713,7 @@ const InchesToMM = () => {
         }
       },
     });
-  
+
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFont("helvetica", "bold");
     doc.text(
@@ -779,12 +724,9 @@ const InchesToMM = () => {
       10,
       finalY
     );
-  
+
     window.open(doc.output("bloburl"));
   };
-  
-  
-
 
   const convertValue = (value, batchNumber) => {
     if (typeof value === "string") {
@@ -820,7 +762,7 @@ const InchesToMM = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".xlsx, .xls";
-    input.style.display = "none"; // Hidden input
+    input.style.display = "none";
 
     input.addEventListener("change", (event) => {
       const file = event.target.files[0];
@@ -863,11 +805,77 @@ const InchesToMM = () => {
   };
 
 
+  // const handleTableChange = (changes, source) => {
+  //   if (changes && source !== "loadData") {
+  //     setTableData((prevData) => {
+  //       const newData = JSON.parse(JSON.stringify(prevData));
+
+  //       changes.forEach(([row, col, oldValue, newValue]) => {
+  //         if (newValue !== oldValue) {
+  //           // Handle REMARK column (col === 3)
+  //           if (col === 3) {
+  //             const placeholderMap = {
+  //               c: "Cross",
+  //               f: "Fix",
+  //               p: "Profile",
+  //               j: "J Cross",
+  //               d: "D Cross",
+  //               u: "Upar Cross",
+  //               n: "Niche Cross",
+  //               g: "Glass",
+  //               fi: "figure",
+  //             };
+
+  //             const match = newValue.match(/^([a-z]+)?\.?(\d+)?$/i);
+  //             let text = "";
+  //             let number = "";
+
+  //             if (match) {
+  //               const key = match[1]?.toLowerCase(); // Optional letter
+  //               const num = match[2]; // Optional number
+
+  //               if (key && placeholderMap[key]) {
+  //                 text = placeholderMap[key]; // Get placeholder text
+  //               }
+
+  //               if (num && ["1", "2", "3", "5"].includes(num)) {
+  //                 number = num; // Get valid number
+  //               }
+  //             }
+
+  //             if (text || number) {
+  //               newData[row][col] = text && number ? `${text} ${number}` : text || number;
+  //             } else {
+  //               newData[row][col] = newValue;
+  //             }
+  //           } else {
+  //             // Directly update other columns without special handling
+  //             newData[row][col] = newValue;
+  //           }
+
+  //           // Sync dependent columns for WEIGHT and HEIGHT
+  //           if (col === 0) {
+  //             newData[row][4] = newValue.trim() ? convertValue(newValue, batchNumber) : "";
+  //           }
+  //           if (col === 1) {
+  //             newData[row][5] = newValue.trim() ? convertValue(newValue, batchNumber) : "";
+  //           }
+  //           if (col === 2) {
+  //             newData[row][6] = newValue; // Sync PCS column
+  //           }
+  //         }
+  //       });
+
+  //       return newData;
+  //     });
+  //   }
+  // };
+
   const handleTableChange = (changes, source) => {
     if (changes && source !== "loadData") {
       setTableData((prevData) => {
         const newData = JSON.parse(JSON.stringify(prevData));
-  
+
         changes.forEach(([row, col, oldValue, newValue]) => {
           if (newValue !== oldValue) {
             // Handle REMARK column (col === 3)
@@ -881,55 +889,60 @@ const InchesToMM = () => {
                 u: "Upar Cross",
                 n: "Niche Cross",
                 g: "Glass",
+                fi: "Figure",
               };
-  
-              const match = newValue.match(/^([a-z]+)?\.?(\d+)?$/i); // Match optional letter and number
-              let text = "";
-              let number = "";
-  
-              if (match) {
-                const key = match[1]?.toLowerCase(); // Optional letter
-                const num = match[2]; // Optional number
-  
-                if (key && placeholderMap[key]) {
-                  text = placeholderMap[key]; // Get placeholder text
+
+              if (typeof newValue === "string") {
+                const match = newValue.match(/^([a-z]+)?\.?(\d+)?$/i);
+                let text = "";
+                let number = "";
+
+                if (match) {
+                  const key = match[1]?.toLowerCase(); // Optional letter
+                  const num = match[2]; // Optional number
+
+                  if (key && placeholderMap[key]) {
+                    text = placeholderMap[key]; // Get placeholder text
+                  }
+
+                  if (num && ["1", "2", "3", "5"].includes(num)) {
+                    number = num;
+                  }
                 }
-  
-                if (num && ["1", "2", "3", "5"].includes(num)) {
-                  number = num; // Get valid number
+
+                if (text || number) {
+                  newData[row][col] = text && number ? `${text} ${number}` : text || number;
+                } else {
+                  newData[row][col] = newValue;
                 }
-              }
-  
-              if (text || number) {
-                newData[row][col] = text && number ? `${text} ${number}` : text || number;
               } else {
+                // Fallback for non-string newValue
                 newData[row][col] = newValue;
               }
             } else {
               // Directly update other columns without special handling
               newData[row][col] = newValue;
             }
-  
+
             // Sync dependent columns for WEIGHT and HEIGHT
             if (col === 0) {
-              newData[row][4] = newValue.trim() ? convertValue(newValue, batchNumber) : "";
+              newData[row][4] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
             }
             if (col === 1) {
-              newData[row][5] = newValue.trim() ? convertValue(newValue, batchNumber) : "";
+              newData[row][5] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
             }
             if (col === 2) {
               newData[row][6] = newValue; // Sync PCS column
             }
           }
         });
-  
+
         return newData;
       });
     }
   };
-  
 
-  
+
   const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
 
   const toggleModal = () => {
@@ -1147,6 +1160,8 @@ const InchesToMM = () => {
         </Button>
         <Button className="mb-2 me-2" color="info" onClick={downloadPDF}>
           Download PDF
+        </Button> <Button className="mb-2 me-2" color="info" onClick={downloadExcel}>
+          Download Excel
         </Button>
         <Button className="mb-2 me-2" color="warning" onClick={printPDF}>
           Print PDF
@@ -1184,170 +1199,78 @@ const InchesToMM = () => {
           Batch Number: {batchNumber}
         </Tooltip>
 
-        {/* <HotTable
-  data={JSON.parse(JSON.stringify(tableData))}
-  colHeaders={true}
-  rowHeaders={true}
-  width="100%"
-  height="800"
-  stretchH="all"
-  licenseKey="non-commercial-and-evaluation"
-  afterChange={handleTableChange}
-  cells={(row, col, prop) => {
-    const cellProperties = {};
-    const value = tableData[row] ? tableData[row][col] : "";
+        <HotTable
+          data={JSON.parse(JSON.stringify(tableData))}
+          colHeaders={true}
+          rowHeaders={(index) => {
+            // Return serial number starting from 1 for the second row onward
+            return index > 0 ? `${index}` : '';
+          }}
+          // rowHeaders={true}
+          width="100%"
+          height="800"
+          stretchH="all"
+          licenseKey="non-commercial-and-evaluation"
+          afterChange={handleTableChange}
+          cells={(row, col, prop) => {
+            const cellProperties = {};
+            const value = tableData[row] ? tableData[row][col] : "";
 
-    // Placeholder map for text-based values
-    const placeholderMap = {
-      c: "Cross",
-      f: "Fix",
-      p: "Profile",
-      j: "J Cross",
-      d: "D Cross",
-      u: "Upar Cross",
-      n: "Niche Cross",
-      g: "Glass",
-    };
+            const placeholderMap = {
+              c: "Cross",
+              f: "Fix",
+              p: "Profile",
+              j: "J Cross",
+              d: "D Cross",
+              u: "Upar Cross",
+              n: "Niche Cross",
+              g: "Glass",
+              fi: "figure"
+            };
+            if (col === 3) {
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.innerHTML = "";
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?$/i);
+                let text = "";
+                let imageNumber = "";
 
-    // Renderer for the REMARK column
-    if (col === 3) {
-      cellProperties.renderer = (
-        instance,
-        td,
-        row,
-        col,
-        prop,
-        value
-      ) => {
-        td.innerHTML = ""; // Clear existing content
+                if (match) {
+                  const key = match[1]?.toLowerCase();
+                  const number = match[2];
+                  if (key && placeholderMap[key]) {
+                    text = placeholderMap[key];
+                  }
+                  if (number && ["1", "2", "3", "5"].includes(number)) {
+                    imageNumber = number;
+                  }
+                }
+                if (text) {
+                  td.textContent = text;
+                }
 
-        // Regex to capture text part (e.g., c, n) and number part (e.g., 1, 2, etc.)
-        const match = value?.match(/^([a-z]+)?\.?(\d+)?$/i); // Match optional letter and number
-        let text = "";
-        let imageNumber = "";
-
-        if (match) {
-          const key = match[1]?.toLowerCase(); // Optional letter (e.g., c, n)
-          const number = match[2]; // Optional number (e.g., 1, 2)
-
-          if (key && placeholderMap[key]) {
-            text = placeholderMap[key]; // Get placeholder text
-          }
-
-          if (number && ["1", "2", "3", "5"].includes(number)) {
-            imageNumber = number; // Get valid image number
-          }
-        }
-
-        // Render text and image in the same cell
-        if (text || imageNumber) {
-          // Render text if available
-          if (text) {
-            td.textContent = text;
-          }
-
-          // Render image if available
-          if (imageNumber) {
-            const img = document.createElement("img");
-            img.src = arrowMap[imageNumber]; // Map image number to URL
-            img.style.maxWidth = "20px";
-            img.style.maxHeight = "20px";
-            img.style.marginLeft = text ? "8px" : "0"; // Add spacing if text is present
-            td.appendChild(img);
-          }
-        } else {
-          // Fallback: Show the raw value for unmatched cases
-          td.textContent = value || "";
-        }
-      };
-    }
-
-    return cellProperties;
-  }}
-/> */}
-
-<HotTable
-  data={JSON.parse(JSON.stringify(tableData))}
-  colHeaders={true}
-  rowHeaders={true}
-  width="100%"
-  height="800"
-  stretchH="all"
-  licenseKey="non-commercial-and-evaluation"
-  afterChange={handleTableChange}
-  cells={(row, col, prop) => {
-    const cellProperties = {};
-    const value = tableData[row] ? tableData[row][col] : "";
-
-    // Placeholder map for text-based values
-    const placeholderMap = {
-      c: "Cross",
-      f: "Fix",
-      p: "Profile",
-      j: "J Cross",
-      d: "D Cross",
-      u: "Upar Cross",
-      n: "Niche Cross",
-      g: "Glass",
-    };
-
-    // Renderer for the REMARK column (col === 3)
-    if (col === 3) {
-      cellProperties.renderer = (
-        instance,
-        td,
-        row,
-        col,
-        prop,
-        value
-      ) => {
-        td.innerHTML = ""; // Clear any existing content
-
-        // Regex to capture the letter part (e.g., c, n) and number part (e.g., 1)
-        const match = value?.match(/^([a-z]+)?\.?(\d+)?$/i); // Match letter (e.g., c) and number (e.g., 1)
-        let text = "";
-        let imageNumber = "";
-
-        if (match) {
-          const key = match[1]?.toLowerCase(); // Letter (e.g., c, n)
-          const number = match[2]; // Number part (e.g., 1)
-
-          // Get the corresponding placeholder text (like "Cross" or "Niche Cross")
-          if (key && placeholderMap[key]) {
-            text = placeholderMap[key];
-          }
-
-          // Get image number (only 1, 2, 3, or 5 are valid for the image)
-          if (number && ["1", "2", "3", "5"].includes(number)) {
-            imageNumber = number;
-          }
-        }
-
-        // If text is found (like "Cross" or "Niche Cross")
-        if (text) {
-          td.textContent = text; // Display the text in the cell
-        }
-
-        // If a valid image number is found, display the image
-        if (imageNumber) {
-          const img = document.createElement("img");
-          img.src = arrowMap[imageNumber]; // Use the image number to fetch the image URL
-          img.style.maxWidth = "20px";
-          img.style.maxHeight = "20px";
-          img.style.marginLeft = "8px"; // Space between text and image
-          td.appendChild(img);
-        }
-
-        // If neither text nor image is found, just display the raw value
-        if (!text && !imageNumber) {
-          td.textContent = value || "";
-        }
-      };
-    }
-
-    return cellProperties;
-  }}
-/>
+                if (imageNumber) {
+                  const img = document.createElement("img");
+                  img.src = arrowMap[imageNumber];
+                  img.style.maxWidth = "20px";
+                  img.style.maxHeight = "20px";
+                  img.style.marginLeft = "8px";
+                  td.appendChild(img);
+                }
+                if (!text && !imageNumber) {
+                  td.textContent = value || "";
+                }
+              };
+            }
+            return cellProperties;
+          }}
+        />
 
 
 

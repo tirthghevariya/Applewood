@@ -6,9 +6,13 @@ import {
   Button,
   Input,
   Label,
+  Modal,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
   Tooltip,
 } from "reactstrap";
-import { getDocs, collection } from "firebase/firestore";
+import { doc, updateDoc, getDocs, collection } from "firebase/firestore";
 import { db } from "../../firebase";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -26,6 +30,10 @@ const MMToMM = () => {
   const [batchNumber, setBatchNumber] = useState(0);
   const dispatch = useDispatch();
   const [tooltipOpen, setTooltipOpen] = useState(false);
+  const [tools, setTools] = useState(0);
+  const [edge, setEdge] = useState(0);
+  const [field1, setField1] = useState(tools.toString());
+  const [field2, setField2] = useState(edge.toString());
 
   const arrowMap = {
     1: leftArrow,
@@ -47,6 +55,25 @@ const MMToMM = () => {
     return `${day}-${month}-${year}`;
   };
 
+  useEffect(() => {
+    const fetchBatchNumber = async () => {
+      try {
+        const querySnapshot = await getDocs(collection(db, "batchNumber"));
+        const batchData = querySnapshot.docs[0]?.data();
+        if (batchData && batchData.batchNumber) {
+          setBatchNumber(parseFloat(batchData.batchNumber));
+          setTools(parseFloat(batchData.tools));
+          setEdge(parseFloat(batchData.edgeBand));
+        }
+      } catch (error) {
+        console.error("Error fetching batch number:", error);
+      }
+    };
+    fetchBatchNumber();
+    setField1(tools.toString());
+    setField2(edge.toString());
+  }, [tools, edge]);
+
   const [date, setDate] = useState(formatDateToDMY(new Date()));
   const [clientName, setClientName] = useState("");
   const [book, setBook] = useState("");
@@ -65,6 +92,38 @@ const MMToMM = () => {
     };
     fetchBatchNumber();
   }, []);
+
+  const handleFormSubmit = async () => {
+    const toolsValue = parseFloat(field1);
+    const edgeBandValue = parseFloat(field2);
+
+    if (isNaN(toolsValue) || isNaN(edgeBandValue)) {
+      alert("Please enter valid numeric values for Tools and Edge band.");
+      return;
+    }
+    const calculatedValue = (toolsValue + edgeBandValue) / 2;
+    const finalBatchNumber = calculatedValue;
+    try {
+      const newRecord = {
+        tools: toolsValue,
+        edgeBand: edgeBandValue,
+        batchNumber: parseFloat(finalBatchNumber.toFixed(2)),
+      };
+      const batchRef = doc(db, "batchNumber", "rA2ORPJZleb2WWbHLMav");
+      await updateDoc(batchRef, newRecord);
+      dispatch(
+        showToast({
+          type: "success",
+          msg: "Batch Number updated successfully",
+        })
+      );
+      toggleModal();
+      window.location.reload();
+    } catch (error) {
+      console.error("Error adding record to Firebase:", error);
+      alert("Failed to add record.");
+    }
+  };
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("userData"));
@@ -513,6 +572,10 @@ const MMToMM = () => {
 
   const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const toggleModal = () => {
+    setIsModalOpen(!isModalOpen);
+  };
 
   return (
     <React.Fragment>
@@ -626,10 +689,12 @@ const MMToMM = () => {
         <Button className="mb-2 me-2" color="warning" onClick={printPDF}>
           Print PDF
         </Button>
+
         <Button
           className="mb-2 me-2"
           color="primary"
           id="addBatchButton"
+          onClick={toggleModal}
         >
           Update Batch
         </Button>
@@ -677,6 +742,37 @@ const MMToMM = () => {
           }}
         />
       </div>
+      <Modal isOpen={isModalOpen} toggle={toggleModal}>
+        <ModalHeader toggle={toggleModal}>Add Batch Number</ModalHeader>
+        <ModalBody>
+          <div className="form-group">
+            <Label for="field1">Tools:</Label>
+            <Input
+              type="number"
+              id="field1"
+              value={field1}
+              onChange={(e) => setField1(e.target.value)}
+            />
+          </div>
+          <div className="form-group mt-3">
+            <Label for="field2">Edge Band:</Label>
+            <Input
+              type="number"
+              id="field2"
+              value={field2}
+              onChange={(e) => setField2(e.target.value)}
+            />
+          </div>
+        </ModalBody>
+        <ModalFooter>
+          <Button color="secondary" onClick={toggleModal}>
+            Cancel
+          </Button>
+          <Button color="primary" onClick={handleFormSubmit}>
+            Submit
+          </Button>
+        </ModalFooter>
+      </Modal>
     </React.Fragment>
   );
 };
