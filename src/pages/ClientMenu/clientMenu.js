@@ -351,36 +351,48 @@ const ClientMenu = () => {
         margin: { top: tableStartY },
         didDrawCell: (data) => {
           if (!data || !data.row || !data.cell) return;
-
+        
+          // Check if this cell needs an image
           const cellText = data.cell.text[0];
-          const arrowImagePath = arrowImages[cellText];
-
-          if (arrowImagePath && data.column.index === 4) {
-            doc.setFillColor(255, 255, 255);
+          const arrowImagePath = arrowImages[cellText]; // Get image for the text
+        
+          if (arrowImagePath && data.column.index === 4) { // Assuming "REMARK" is at index 4
+            // Clear the cell background
+            doc.setFillColor(255, 255, 255); // White background
             doc.rect(
               data.cell.x,
               data.cell.y,
               data.cell.width,
               data.cell.height,
-              "F"
+              "F" // Fill style
             );
-
+        
+            // Calculate cell dimensions
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
-            const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
-            const imageWidth = maxImageSize;
-            const imageHeight = maxImageSize;
-
+        
+            // Calculate image dimensions while keeping aspect ratio
+            const imageMaxSize = Math.min(cellWidth, cellHeight) - 4; // 4px padding
+            const imageWidth = imageMaxSize;
+            const imageHeight = imageMaxSize;
+        
+            // Center the image within the cell
+            const imageX = data.cell.x + (cellWidth - imageWidth) / 2;
+            const imageY = data.cell.y + (cellHeight - imageHeight) / 2;
+        
+            // Add the image
             doc.addImage(
               arrowImagePath,
               "PNG",
-              data.cell.x + (cellWidth - imageWidth) / 2,
-              data.cell.y + (cellHeight - imageHeight) / 2,
+              imageX,
+              imageY,
               imageWidth,
               imageHeight
             );
           }
         },
+        
+        
       });
 
       const finalY = doc.lastAutoTable.finalY + 10;
@@ -389,6 +401,56 @@ const ClientMenu = () => {
       window.open(doc.output("bloburl"));
     }
   };
+  const importFile = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx, .xls";
+    input.style.display = "none"; // Hidden input
+  
+    input.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+  
+      const reader = new FileReader();
+  
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert to array of arrays
+  
+        if (jsonData.length > 1) {
+          const [, ...rows] = jsonData; // Skip the first row (headers) and get the remaining rows
+  
+          // Ensure that we do not pass a negative value to Array
+          const emptyRowsToAdd = Math.max(0, 100 - rows.length);
+  
+          const updatedData = [
+            ...tableData.slice(0, 1), // Keep the original header row
+            ...rows, // Add the rows from the Excel file
+            ...Array(emptyRowsToAdd).fill(["", "", "", "", "", "", ""]), // Fill remaining rows with empty data
+          ];
+  
+          setTableData(updatedData);
+  
+          // Trigger handleTableChange for imported rows
+          rows.forEach((rowData, rowIndex) => {
+            const row = rowIndex + 1; // Adjust for headers
+            rowData.forEach((cellValue, colIndex) => {
+              handleTableChange([[row, colIndex, tableData[row]?.[colIndex], cellValue]], "import");
+            });
+          });
+        }
+      };
+  
+      reader.readAsArrayBuffer(file);
+    });
+  
+    // Trigger file input click
+    input.click();
+  };
+  
 
   const convertValue = (value) => {
     if (typeof value === "string") {
@@ -623,7 +685,14 @@ const ClientMenu = () => {
         <Button className="mb-2 me-2" color="warning" onClick={printPDF}>
           Print PDF
         </Button>
-
+        <Button
+          className="mb-2 me-2"
+         color="success"
+          id="addBatchButton"
+          onClick={importFile}
+        >
+          Import
+        </Button>
         <HotTable
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}
