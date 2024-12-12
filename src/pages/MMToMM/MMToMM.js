@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HotTable } from "@handsontable/react";
+import { registerAllModules } from 'handsontable/registry';
 import "handsontable/dist/handsontable.full.min.css";
 import {
   Button,
@@ -34,7 +35,7 @@ const MMToMM = () => {
   const [edge, setEdge] = useState(0);
   const [field1, setField1] = useState(tools.toString());
   const [field2, setField2] = useState(edge.toString());
-
+  registerAllModules();
   const arrowMap = {
     1: leftArrow,
     2: downArrow,
@@ -43,7 +44,7 @@ const MMToMM = () => {
   };
 
   const [tableData, setTableData] = useState([
-    ["WEIGHT", "HEIGHT", "PCS", "REMARK", "WEIGHT(MM)", "HEIGHT(MM)", "PCS"],
+    ["WIDTH", "HEIGHT", "PCS", "REMARK", "WIDTH(MM)", "HEIGHT(MM)", "PCS"],
     ...Array(100).fill(["", "", "", "", "", "", ""]),
   ]);
 
@@ -196,11 +197,11 @@ const MMToMM = () => {
         ? tableData
         : [
           [
-            "WEIGHT",
+            "WIDTH",
             "HEIGHT",
             "PCS",
             "REMARK",
-            "WEIGHT(MM)",
+            "WIDTH(MM)",
             "HEIGHT(MM)",
             "PCS",
           ],
@@ -340,11 +341,11 @@ const MMToMM = () => {
         ? tableData
         : [
           [
-            "WEIGHT",
+            "WIDTH",
             "HEIGHT",
             "PCS",
             "REMARK",
-            "WEIGHT(MM)",
+            "WIDTH(MM)",
             "HEIGHT(MM)",
             "PCS",
           ],
@@ -516,7 +517,10 @@ const MMToMM = () => {
                 newData[row][col] = "Upar Cross";
               } else if (newValue && newValue.startsWith("n")) {
                 newData[row][col] = "Niche Cross";
-              }
+              } else if (newValue && newValue.startsWith("dr")) {
+                newData[row][col] = "Drawer"
+              };
+
             }
             newData[row][6] = newData[row][2];
           }

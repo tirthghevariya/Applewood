@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HotTable } from "@handsontable/react";
+import { registerAllModules } from 'handsontable/registry';
 import "handsontable/dist/handsontable.full.min.css";
 import {
   Button,
@@ -23,7 +24,7 @@ import downArrow from "../../assets/images/down.png";
 const ClientMenu = () => {
   const navigate = useNavigate();
   const dispatch = useDispatch();
-
+  registerAllModules();
   const arrowMap = {
     1: leftArrow,
     2: downArrow,
@@ -32,7 +33,7 @@ const ClientMenu = () => {
   };
 
   const [tableData, setTableData] = useState([
-    ["WEIGHT", "HEIGHT", "PCS", "REMARK"],
+    ["WIDTH", "HEIGHT", "PCS", "REMARK"],
     ...Array(100).fill(["", "", "", ""]),
   ]);
 
@@ -117,11 +118,11 @@ const ClientMenu = () => {
         ? tableData
         : [
           [
-            "WEIGHT",
+            "WIDTH",
             "HEIGHT",
             "PCS",
             "REMARK",
-            "WEIGHT(MM)",
+            "WIDTH(MM)",
             "HEIGHT(MM)",
             "PCS",
           ],
@@ -261,11 +262,11 @@ const ClientMenu = () => {
         ? tableData
         : [
           [
-            "WEIGHT",
+            "WIDTH",
             "HEIGHT",
             "PCS",
             "REMARK",
-            "WEIGHT(MM)",
+            "WIDTH(MM)",
             "HEIGHT(MM)",
             "PCS",
           ],
@@ -351,11 +352,11 @@ const ClientMenu = () => {
         margin: { top: tableStartY },
         didDrawCell: (data) => {
           if (!data || !data.row || !data.cell) return;
-        
+
           // Check if this cell needs an image
           const cellText = data.cell.text[0];
           const arrowImagePath = arrowImages[cellText]; // Get image for the text
-        
+
           if (arrowImagePath && data.column.index === 4) { // Assuming "REMARK" is at index 4
             // Clear the cell background
             doc.setFillColor(255, 255, 255); // White background
@@ -366,20 +367,20 @@ const ClientMenu = () => {
               data.cell.height,
               "F" // Fill style
             );
-        
+
             // Calculate cell dimensions
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
-        
+
             // Calculate image dimensions while keeping aspect ratio
             const imageMaxSize = Math.min(cellWidth, cellHeight) - 4; // 4px padding
             const imageWidth = imageMaxSize;
             const imageHeight = imageMaxSize;
-        
+
             // Center the image within the cell
             const imageX = data.cell.x + (cellWidth - imageWidth) / 2;
             const imageY = data.cell.y + (cellHeight - imageHeight) / 2;
-        
+
             // Add the image
             doc.addImage(
               arrowImagePath,
@@ -391,8 +392,8 @@ const ClientMenu = () => {
             );
           }
         },
-        
-        
+
+
       });
 
       const finalY = doc.lastAutoTable.finalY + 10;
@@ -406,34 +407,34 @@ const ClientMenu = () => {
     input.type = "file";
     input.accept = ".xlsx, .xls";
     input.style.display = "none"; // Hidden input
-  
+
     input.addEventListener("change", (event) => {
       const file = event.target.files[0];
       if (!file) return;
-  
+
       const reader = new FileReader();
-  
+
       reader.onload = (e) => {
         const data = new Uint8Array(e.target.result);
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
         const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert to array of arrays
-  
+
         if (jsonData.length > 1) {
           const [, ...rows] = jsonData; // Skip the first row (headers) and get the remaining rows
-  
+
           // Ensure that we do not pass a negative value to Array
           const emptyRowsToAdd = Math.max(0, 100 - rows.length);
-  
+
           const updatedData = [
             ...tableData.slice(0, 1), // Keep the original header row
             ...rows, // Add the rows from the Excel file
             ...Array(emptyRowsToAdd).fill(["", "", "", "", "", "", ""]), // Fill remaining rows with empty data
           ];
-  
+
           setTableData(updatedData);
-  
+
           // Trigger handleTableChange for imported rows
           rows.forEach((rowData, rowIndex) => {
             const row = rowIndex + 1; // Adjust for headers
@@ -443,14 +444,14 @@ const ClientMenu = () => {
           });
         }
       };
-  
+
       reader.readAsArrayBuffer(file);
     });
-  
+
     // Trigger file input click
     input.click();
   };
-  
+
 
   const convertValue = (value) => {
     if (typeof value === "string") {
@@ -520,7 +521,9 @@ const ClientMenu = () => {
                 newData[row][col] = "Upar Cross";
               } else if (newValue && newValue.startsWith("n")) {
                 newData[row][col] = "Niche Cross";
-              }
+              } else if (newValue && newValue.startsWith("dr")) {
+                newData[row][col] = "Drawer"
+              };
             }
           }
         });
@@ -687,7 +690,7 @@ const ClientMenu = () => {
         </Button>
         <Button
           className="mb-2 me-2"
-         color="success"
+          color="success"
           id="addBatchButton"
           onClick={importFile}
         >
@@ -697,8 +700,9 @@ const ClientMenu = () => {
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}
           rowHeaders={true}
-          width="100%"
-          height="800"
+          width="auto"
+          height="auto"
+
           stretchH="all"
           licenseKey="non-commercial-and-evaluation"
           afterChange={handleTableChange}

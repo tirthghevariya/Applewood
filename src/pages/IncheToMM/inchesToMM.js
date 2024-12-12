@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useRef, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HotTable } from "@handsontable/react";
 import "handsontable/dist/handsontable.full.min.css";
@@ -12,6 +12,7 @@ import {
   ModalFooter,
   Tooltip,
 } from "reactstrap";
+import { registerAllModules } from 'handsontable/registry';
 import { doc, updateDoc, getDocs, collection } from "firebase/firestore";
 import { db } from "../../firebase";
 import * as XLSX from "xlsx";
@@ -32,7 +33,7 @@ const InchesToMM = () => {
   const [edge, setEdge] = useState(0);
   const dispatch = useDispatch();
   const [tooltipOpen, setTooltipOpen] = useState(false);
-
+  registerAllModules();
   const arrowMap = {
     1: leftArrow,
     2: downArrow,
@@ -80,6 +81,7 @@ const InchesToMM = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [field1, setField1] = useState(tools.toString());
   const [field2, setField2] = useState(edge.toString());
+  const [luminate, setLuminate] = useState("");
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("userData"));
@@ -141,21 +143,19 @@ const InchesToMM = () => {
       ? tableData
       : [["WEIGHT", "HEIGHT", "PCS", "REMARK", "WEIGHT(MM)", "HEIGHT(MM)", "PCS(FINAL)"]];
 
-    // Rearrange headers to move "REMARK" to the end
     const headers = [...safeTableData[0]];
     const remarkIndex = headers.indexOf("REMARK");
 
     if (remarkIndex > -1) {
-      headers.splice(remarkIndex, 1); // Remove "REMARK"
-      headers.push("REMARK"); // Add "REMARK" to the end
+      headers.splice(remarkIndex, 1);
+      headers.push("REMARK");
     }
 
-    // Reorder rows based on the new header order
     const reorderedData = safeTableData.slice(1).map((row) => {
       const remarkValue = row[remarkIndex];
       const newRow = [...row];
-      newRow.splice(remarkIndex, 1); // Remove "REMARK"
-      newRow.push(remarkValue); // Add "REMARK" to the end
+      newRow.splice(remarkIndex, 1);
+      newRow.push(remarkValue);
       return newRow;
     });
 
@@ -193,6 +193,11 @@ const InchesToMM = () => {
     doc.text(`Client: ${clientName}`, 10, 20);
     doc.text(`Book: ${book}`, 10, 30);
 
+    // Add Luminate No if it exists
+    if (luminate) {
+      doc.text(`Luminate No: ${luminate}`, 10, 40);
+    }
+
     const selectedColorImage = colorImages[selectedColor.replace(" ", "_")] || null;
     let colorImageBase64 = null;
 
@@ -200,10 +205,10 @@ const InchesToMM = () => {
       colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
     }
 
-    let tableStartY = 40;
+    let tableStartY = luminate ? 50 : 40;
     if (colorImageBase64) {
       doc.addImage(colorImageBase64, "PNG", 130, 0, 50, 70);
-      tableStartY = 80;
+      tableStartY = luminate ? 90 : 80;
     }
 
     // Prepare the final data for rendering
@@ -264,6 +269,7 @@ const InchesToMM = () => {
     const sanitizedClientName = clientName.toString().toLowerCase();
     doc.save(`${sanitizedClientName}${date}.pdf`);
   };
+
 
   const normalPDF = async () => {
     if (!clientName) {
@@ -684,7 +690,6 @@ const InchesToMM = () => {
           const remarkImage = arrowImages[cellText];
 
           if (remarkImage) {
-            // Clear cell content and add the image
             doc.setFillColor(255, 255, 255);
             doc.rect(
               data.cell.x,
@@ -729,8 +734,31 @@ const InchesToMM = () => {
   };
 
   const convertValue = (value, batchNumber) => {
+
     if (typeof value === "string") {
+      // Split the value on `/`
+      const partss = value.split("/");
+
+      if (partss.length === 2) {
+        // Handle each part of the fraction
+
+        const calculatePart = (part) => {
+          const partParts = part.split(".");
+          const whole = parseFloat(partParts[0]) || 0;
+          const fractional = parseFloat(partParts.slice(1).join(".")) || 0;
+          const wholeCalc = whole * 25.4;
+          const fractionalCalc = fractional * 3.17;
+          return wholeCalc + fractionalCalc + batchNumber;
+        };
+
+        const firstCalc = calculatePart(partss[0]).toFixed(1);
+        const secondCalc = calculatePart(partss[1]).toFixed(1);
+
+        // Return as a fraction
+        return `${firstCalc}/${secondCalc}`;
+      }
       const parts = value.split(".");
+
       if (parts.length === 2 && parts[1].length === 1) {
         const wholeNumber = parseFloat(parts[0]) || 0;
         const fractionalNumber = parseFloat(parts[1]) || 0;
@@ -804,73 +832,6 @@ const InchesToMM = () => {
     input.click();
   };
 
-
-  // const handleTableChange = (changes, source) => {
-  //   if (changes && source !== "loadData") {
-  //     setTableData((prevData) => {
-  //       const newData = JSON.parse(JSON.stringify(prevData));
-
-  //       changes.forEach(([row, col, oldValue, newValue]) => {
-  //         if (newValue !== oldValue) {
-  //           // Handle REMARK column (col === 3)
-  //           if (col === 3) {
-  //             const placeholderMap = {
-  //               c: "Cross",
-  //               f: "Fix",
-  //               p: "Profile",
-  //               j: "J Cross",
-  //               d: "D Cross",
-  //               u: "Upar Cross",
-  //               n: "Niche Cross",
-  //               g: "Glass",
-  //               fi: "figure",
-  //             };
-
-  //             const match = newValue.match(/^([a-z]+)?\.?(\d+)?$/i);
-  //             let text = "";
-  //             let number = "";
-
-  //             if (match) {
-  //               const key = match[1]?.toLowerCase(); // Optional letter
-  //               const num = match[2]; // Optional number
-
-  //               if (key && placeholderMap[key]) {
-  //                 text = placeholderMap[key]; // Get placeholder text
-  //               }
-
-  //               if (num && ["1", "2", "3", "5"].includes(num)) {
-  //                 number = num; // Get valid number
-  //               }
-  //             }
-
-  //             if (text || number) {
-  //               newData[row][col] = text && number ? `${text} ${number}` : text || number;
-  //             } else {
-  //               newData[row][col] = newValue;
-  //             }
-  //           } else {
-  //             // Directly update other columns without special handling
-  //             newData[row][col] = newValue;
-  //           }
-
-  //           // Sync dependent columns for WEIGHT and HEIGHT
-  //           if (col === 0) {
-  //             newData[row][4] = newValue.trim() ? convertValue(newValue, batchNumber) : "";
-  //           }
-  //           if (col === 1) {
-  //             newData[row][5] = newValue.trim() ? convertValue(newValue, batchNumber) : "";
-  //           }
-  //           if (col === 2) {
-  //             newData[row][6] = newValue; // Sync PCS column
-  //           }
-  //         }
-  //       });
-
-  //       return newData;
-  //     });
-  //   }
-  // };
-
   const handleTableChange = (changes, source) => {
     if (changes && source !== "loadData") {
       setTableData((prevData) => {
@@ -941,7 +902,6 @@ const InchesToMM = () => {
       });
     }
   };
-
 
   const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
 
@@ -1024,15 +984,19 @@ const InchesToMM = () => {
       /\.(png|jpe?g|svg)$/
     )
   );
+  const [isLuminateFieldVisible, setIsLuminateFieldVisible] = useState(false);
 
   const colorOptions = useMemo(() => {
-    return Object.keys(colorImages)
+    const options = Object.keys(colorImages)
       .filter((key) => key.startsWith("AW_"))
       .map((key) => ({
         code: key.replace("AW_", "AW "),
         imageSrc: colorImages[key],
       }));
+    options.push({ code: "Blank", imageSrc: null });
+    return options;
   }, [colorImages]);
+
 
   useEffect(() => {
     const storedColor = localStorage.getItem("selectedColor");
@@ -1040,11 +1004,29 @@ const InchesToMM = () => {
       setSelectedColor(storedColor);
     }
   }, []);
+
   const handleColorSelect = (code) => {
     setSelectedColor(code);
-    setIsOpen(false);
-    localStorage.setItem("selectedColor", code);
+    if (code === "Blank") {
+      setIsLuminateFieldVisible(true);
+    } else {
+      setIsLuminateFieldVisible(false);
+    }
   };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+  const dropdownRef = useRef(null);
 
   return (
     <React.Fragment>
@@ -1081,66 +1063,25 @@ const InchesToMM = () => {
               className="mb-3"
             />
           </div>
-          <div style={{ width: "50%" }}>
-            <div className="ms-4 mb-2">
-              <Label>Color Code:</Label>
-              <div className="dropdown ">
-                <Input
-                  type="text"
-                  readOnly
-                  value={selectedColor.split(".")[0]}
-                  onClick={() => setIsOpen(!isOpen)}
-                  className="form-control dropdown-toggle cursor-pointer"
-                />
-                {isOpen && (
-                  <div
-                    className="dropdown-menu show"
-                    style={{
-                      maxHeight: "40vh",
-                      overflow: "auto",
-                      display: "block",
-                      position: "absolute",
-                      inset: "0px auto auto 0px",
-                      margin: "0px",
-                      transform: "translate(0px, 38px)",
-                    }}
-                  >
-                    {colorOptions.map((option) => (
-                      <button
-                        key={option.code}
-                        className="dropdown-item"
-                        onClick={() => handleColorSelect(option.code)}
-                      >
-                        <img
-                          src={option.imageSrc}
-                          alt={option.code}
-                          style={{
-                            width: "30px",
-                            height: "30px",
-                            marginRight: "10px",
-                            objectFit: "cover",
-                          }}
-                        />
-                        {option.code.split(".")[0]}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            {selectedColor && (
-              <div className="ms-4">
-                <img
-                  src={colorImages[`${selectedColor.replace(" ", "_")}`]}
-                  alt={selectedColor}
+          <div style={{ width: "50%" }}> <div className="ms-4 mb-2">
+            <Label>Color Code:</Label> <div className="dropdown" ref={dropdownRef}>
+              <Input type="text"
+                readOnly value={selectedColor.split(".")[0]}
+                onClick={() => setIsOpen(!isOpen)}
+                className="form-control dropdown-toggle cursor-pointer" />
+              {isOpen && (
+                <div className="dropdown-menu show"
                   style={{
-                    height: "138px",
-                    objectFit: "contain",
-                  }}
-                />
-              </div>
-            )}
-          </div>
+                    maxHeight: "40vh",
+                    overflow: "auto",
+                    display: "block",
+                    position: "absolute",
+                    inset: "0px auto auto 0px",
+                    margin: "0px",
+                    transform: "translate(0px, 38px)",
+                  }} >
+                  {colorOptions.map((option) => (<button key={option.code} className="dropdown-item" onClick={() => handleColorSelect(option.code)} > {option.imageSrc && (<img src={option.imageSrc} alt={option.code} style={{ width: "30px", height: "30px", marginRight: "10px", objectFit: "cover", }} />)} {option.code.split(".")[0]} </button>))} </div>)} </div> </div> {selectedColor && (<div className="ms-4"> {selectedColor !== "Blank" ? (<img src={colorImages[`${selectedColor.replace(" ", "_")}`]} alt={selectedColor} style={{ height: "138px", objectFit: "contain", }} />) : null} </div>)} {isLuminateFieldVisible && (<div className="ms-4 mt-2"> <Label>Luminate No:</Label> <Input type="text" className="form-control" /> </div>)} </div>
+
         </div>
 
         <Button className="mb-2 me-2" color="primary" onClick={addColumn}>
@@ -1149,18 +1090,13 @@ const InchesToMM = () => {
         <Button className="mb-2 ml-2 me-2" color="primary" onClick={addRow}>
           Add Row
         </Button>
-        {/* <Button className="mb-2 me-2" color="success" onClick={downloadExcel}>
-          Download Excel
-        </Button> */}
         <Button className="mb-2 me-2" color="success" onClick={workPDF}>
           Work PDF
         </Button>
         <Button className="mb-2 me-2" color="success" onClick={normalPDF}>
           Normal PDF
         </Button>
-        <Button className="mb-2 me-2" color="info" onClick={downloadPDF}>
-          Download PDF
-        </Button> <Button className="mb-2 me-2" color="info" onClick={downloadExcel}>
+        <Button className="mb-2 me-2" color="info" onClick={downloadExcel}>
           Download Excel
         </Button>
         <Button className="mb-2 me-2" color="warning" onClick={printPDF}>
