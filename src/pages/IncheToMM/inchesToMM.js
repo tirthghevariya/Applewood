@@ -32,6 +32,8 @@ const InchesToMM = () => {
   const [tools, setTools] = useState(0);
   const [edge, setEdge] = useState(0);
   const dispatch = useDispatch();
+  const [isSpecial, setIsSpecial] = useState(false);
+
   const [tooltipOpen, setTooltipOpen] = useState(false);
   registerAllModules();
   const arrowMap = {
@@ -42,8 +44,8 @@ const InchesToMM = () => {
   };
 
   const [tableData, setTableData] = useState([
-    ["WEIGHT", "HEIGHT", "PCS", "REMARK", "WEIGHT(MM)", "HEIGHT(MM)", "PCS"],
-    ...Array(100).fill(["", "", "", "", "", "", ""]),
+    ["WIDTH", "HEIGHT", "PCS", "REMARK", "WIDTH(MM)", "HEIGHT(MM)", "PCS"],
+    ...Array(300).fill(["", "", "", "", "", "", ""]),
   ]);
 
   const formatDateToDMY = (date) => {
@@ -113,9 +115,11 @@ const InchesToMM = () => {
   };
 
   const addRow = () => {
-    const newRow = Array(tableData[0].length).fill("");
-    setTableData((prevData) => [...prevData, newRow]);
+    const newRows = Array(50).fill(Array(tableData[0].length).fill(""));
+
+    setTableData((prevData) => [...prevData, ...newRows]);
   };
+
 
   const downloadExcel = () => {
     const ws = XLSX.utils.aoa_to_sheet([
@@ -141,7 +145,7 @@ const InchesToMM = () => {
 
     const safeTableData = Array.isArray(tableData)
       ? tableData
-      : [["WEIGHT", "HEIGHT", "PCS", "REMARK", "WEIGHT(MM)", "HEIGHT(MM)", "PCS(FINAL)"]];
+      : [["WIDTH", "HEIGHT", "PCS", "REMARK", "WIDTH(MM)", "HEIGHT(MM)", "PCS(FINAL)"]];
 
     const headers = [...safeTableData[0]];
     const remarkIndex = headers.indexOf("REMARK");
@@ -162,7 +166,7 @@ const InchesToMM = () => {
     const sortOrder = [
       "fix", "", "profile", "1", "2", "3", "5",
       "glass", "figure", "cross", "j cross",
-      "d cross", "upar cross", "niche cross"
+      "d cross", "upar cross", "niche cross", "Drawer"
     ];
 
     const orderedData = reorderedData.sort((a, b) => {
@@ -193,7 +197,6 @@ const InchesToMM = () => {
     doc.text(`Client: ${clientName}`, 10, 20);
     doc.text(`Book: ${book}`, 10, 30);
 
-    // Add Luminate No if it exists
     if (luminate) {
       doc.text(`Luminate No: ${luminate}`, 10, 40);
     }
@@ -205,17 +208,15 @@ const InchesToMM = () => {
       colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
     }
 
-    let tableStartY = luminate ? 50 : 40;
+    let tableStartY = luminate ? 40 : 30;
     if (colorImageBase64) {
-      doc.addImage(colorImageBase64, "PNG", 130, 0, 50, 70);
-      tableStartY = luminate ? 90 : 80;
+      doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
+      tableStartY = luminate ? 65 : 55;
     }
 
-    // Prepare the final data for rendering
     const serialData = filteredData.map((row, index) => [index + 1, ...row]);
     const finalHeaders = ["S. No", ...headers];
 
-    // Render table
     doc.autoTable({
       head: [finalHeaders],
       body: serialData,
@@ -270,7 +271,6 @@ const InchesToMM = () => {
     doc.save(`${sanitizedClientName}${date}.pdf`);
   };
 
-
   const normalPDF = async () => {
     if (!clientName) {
       dispatch(
@@ -285,11 +285,11 @@ const InchesToMM = () => {
       ? tableData
       : [
         [
-          "WEIGHT",
+          "WIDTH",
           "HEIGHT",
           "PCS",
           "REMARK",
-          "WEIGHT(MM)",
+          "WIDTH(MM)",
           "HEIGHT(MM)",
           "PCS(FINAL)",
         ],
@@ -326,6 +326,11 @@ const InchesToMM = () => {
     doc.text(`Date: ${date}`, 10, 10);
     doc.text(`Client: ${clientName}`, 10, 20);
     doc.text(`Book: ${book}`, 10, 30);
+
+    if (luminate) {
+      doc.text(`Luminate No: ${luminate}`, 10, 40);
+    }
+
     const selectedColorImage =
       colorImages[selectedColor.replace(" ", "_")] || null;
     let colorImageBase64 = null;
@@ -336,8 +341,8 @@ const InchesToMM = () => {
     let imageYPosition = 0;
 
     if (colorImageBase64) {
-      const imageWidth = 50;
-      const imageHeight = 70;
+      const imageWidth = 40;
+      const imageHeight = 50;
       const imageXPosition = 130;
 
       doc.addImage(
@@ -353,10 +358,12 @@ const InchesToMM = () => {
       doc.text(colorCodeText, imageXPosition, imageHeight + 5);
     }
 
-    let tableStartY = 40;
+    let tableStartY = luminate ? 40 : 30;
     if (colorImageBase64) {
-      tableStartY = imageYPosition + 80;
+      doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
+      tableStartY = luminate ? 65 : 55;
     }
+
     const serialData = filteredData.map((row, index) => [index + 1, ...row]);
     const finalHeaders = ["S. No", ...headers];
     doc.autoTable({
@@ -428,150 +435,6 @@ const InchesToMM = () => {
     });
   };
 
-  const downloadPDF = async () => {
-    if (!clientName) {
-      dispatch(
-        showToast({
-          type: "error",
-          msg: "Please enter client name",
-        })
-      );
-    } else {
-      const safeTableData = Array.isArray(tableData)
-        ? tableData
-        : [
-          [
-            "WEIGHT",
-            "HEIGHT",
-            "PCS",
-            "REMARK",
-            "WEIGHT(MM)",
-            "HEIGHT(MM)",
-            "PCS",
-          ],
-        ];
-
-      const doc = new jsPDF();
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-
-      doc.text(`Date: ${date}`, 10, 10);
-      doc.text(`Client: ${clientName}`, 10, 20);
-      doc.text(`Book: ${book}`, 10, 30);
-
-      const selectedColorImage =
-        colorImages[selectedColor.replace(" ", "_")] || null;
-      let colorImageBase64 = null;
-      if (selectedColorImage) {
-        colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
-      }
-
-      let imageYPosition = 0;
-
-      if (colorImageBase64) {
-        const imageWidth = 50;
-        const imageHeight = 70;
-        const imageXPosition = 130;
-
-        doc.addImage(
-          colorImageBase64,
-          "PNG",
-          imageXPosition,
-          0,
-          imageWidth,
-          imageHeight
-        );
-
-        const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-        doc.text(colorCodeText, imageXPosition, imageHeight + 5);
-      }
-
-      let tableStartY = 40;
-      if (colorImageBase64) {
-        tableStartY = imageYPosition + 80;
-      }
-
-      const filteredData = safeTableData
-        .slice(1)
-        .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
-
-      const pcsIndex = safeTableData[0].indexOf("PCS");
-
-      const totalPCS = filteredData.reduce((sum, row) => {
-        const pcsValue = parseFloat(row[pcsIndex]) || 0;
-        return sum + pcsValue;
-      }, 0);
-
-      const arrowImages = {
-        1: await fetchImageAsBase64(leftArrow),
-        2: await fetchImageAsBase64(downArrow),
-        3: await fetchImageAsBase64(rightArrow),
-        5: await fetchImageAsBase64(upArrow),
-      };
-
-      const processedData = filteredData.map((row) => {
-        return row.map((cell) => {
-          if (["1", "2", "3", "5"].includes(cell)) {
-            return cell;
-          }
-          return cell;
-        });
-      });
-      const serialData = processedData.map((row, index) => [index + 1, ...row]);
-
-      const headers = ["S. No", ...safeTableData[0]];
-
-      doc.autoTable({
-        head: [headers],
-        body: serialData,
-        startY: tableStartY,
-        styles: { fontSize: 10 },
-        theme: "grid",
-        headStyles: { fillColor: [22, 160, 133] },
-        margin: { top: tableStartY },
-        didDrawCell: (data) => {
-          if (!data || !data.row || !data.cell) return;
-
-          const cellText = data.cell.text[0];
-          const arrowImagePath = arrowImages[cellText];
-
-          if (arrowImagePath && data.column.index === 4) {
-            doc.setFillColor(255, 255, 255);
-            doc.rect(
-              data.cell.x,
-              data.cell.y,
-              data.cell.width,
-              data.cell.height,
-              "F"
-            );
-
-            const cellWidth = data.cell.width;
-            const cellHeight = data.cell.height;
-            const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
-            const imageWidth = maxImageSize;
-            const imageHeight = maxImageSize;
-
-            doc.addImage(
-              arrowImagePath,
-              "PNG",
-              data.cell.x + (cellWidth - imageWidth) / 2,
-              data.cell.y + (cellHeight - imageHeight) / 2,
-              imageWidth,
-              imageHeight
-            );
-          }
-        },
-      });
-
-      const finalY = doc.lastAutoTable.finalY + 10;
-      doc.setFont("helvetica", "bold");
-      doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
-
-      const sanitizedClientName = clientName.toString().toLowerCase();
-      doc.save(`${sanitizedClientName}_${date}.pdf`);
-    }
-  };
-
   const printPDF = async () => {
     if (!clientName) {
       dispatch(
@@ -587,11 +450,11 @@ const InchesToMM = () => {
       ? tableData
       : [
         [
-          "WEIGHT",
+          "WIDTH",
           "HEIGHT",
           "PCS",
           "REMARK",
-          "WEIGHT(MM)",
+          "WIDTH(MM)",
           "HEIGHT(MM)",
           "PCS",
         ],
@@ -638,6 +501,10 @@ const InchesToMM = () => {
     doc.text(`Client: ${clientName}`, 10, 20);
     doc.text(`Book: ${book}`, 10, 30);
 
+    if (luminate) {
+      doc.text(`Luminate No: ${luminate}`, 10, 40);
+    }
+
     const selectedColorImage =
       colorImages[selectedColor.replace(" ", "_")] || null;
     let colorImageBase64 = null;
@@ -648,8 +515,8 @@ const InchesToMM = () => {
     let imageYPosition = 0;
 
     if (colorImageBase64) {
-      const imageWidth = 50;
-      const imageHeight = 70;
+      const imageWidth = 40;
+      const imageHeight = 50;
       const imageXPosition = 130;
 
       doc.addImage(
@@ -660,14 +527,12 @@ const InchesToMM = () => {
         imageWidth,
         imageHeight
       );
-
-      const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-      doc.text(colorCodeText, imageXPosition, imageHeight + 5);
     }
 
-    let tableStartY = 40;
+    let tableStartY = luminate ? 40 : 30;
     if (colorImageBase64) {
-      tableStartY = imageYPosition + 80;
+      doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
+      tableStartY = luminate ? 65 : 55;
     }
 
     const serialData = limitedData.map((row, index) => [index + 1, ...row]);
@@ -698,11 +563,9 @@ const InchesToMM = () => {
               data.cell.height,
               "F"
             );
-
-            // Calculate image size and position
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
-            const maxImageSize = Math.min(cellWidth, cellHeight) - 4; // Padding of 2px on all sides
+            const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
             const imageWidth = maxImageSize;
             const imageHeight = maxImageSize;
 
@@ -736,11 +599,9 @@ const InchesToMM = () => {
   const convertValue = (value, batchNumber) => {
 
     if (typeof value === "string") {
-      // Split the value on `/`
       const partss = value.split("/");
 
       if (partss.length === 2) {
-        // Handle each part of the fraction
 
         const calculatePart = (part) => {
           const partParts = part.split(".");
@@ -753,8 +614,6 @@ const InchesToMM = () => {
 
         const firstCalc = calculatePart(partss[0]).toFixed(1);
         const secondCalc = calculatePart(partss[1]).toFixed(1);
-
-        // Return as a fraction
         return `${firstCalc}/${secondCalc}`;
       }
       const parts = value.split(".");
@@ -803,21 +662,19 @@ const InchesToMM = () => {
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert to array of arrays
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
         if (jsonData.length > 1) {
-          const [, ...rows] = jsonData; // Skip the first row (headers) and get the remaining rows
+          const [, ...rows] = jsonData;
           const updatedData = [
-            ...tableData.slice(0, 1), // Keep the original header row
-            ...rows, // Add the rows from the Excel file
-            ...Array(100 - rows.length).fill(["", "", "", "", "", "", ""]), // Fill remaining rows with empty data
+            ...tableData.slice(0, 1),
+            ...rows,
+            ...Array(300 - rows.length).fill(["", "", "", "", "", "", ""]),
           ];
 
           setTableData(updatedData);
-
-          // Trigger handleTableChange for imported rows
           rows.forEach((rowData, rowIndex) => {
-            const row = rowIndex + 1; // Adjust for headers
+            const row = rowIndex + 1;
             rowData.forEach((cellValue, colIndex) => {
               handleTableChange([[row, colIndex, tableData[row]?.[colIndex], cellValue]], "import");
             });
@@ -827,11 +684,8 @@ const InchesToMM = () => {
 
       reader.readAsArrayBuffer(file);
     });
-
-    // Trigger file input click
     input.click();
   };
-
   const handleTableChange = (changes, source) => {
     if (changes && source !== "loadData") {
       setTableData((prevData) => {
@@ -839,7 +693,8 @@ const InchesToMM = () => {
 
         changes.forEach(([row, col, oldValue, newValue]) => {
           if (newValue !== oldValue) {
-            // Handle REMARK column (col === 3)
+            const isSpecialValue = /aw/i.test(newValue) || newValue === "+";
+            setIsSpecial(isSpecialValue);
             if (col === 3) {
               const placeholderMap = {
                 c: "Cross",
@@ -851,19 +706,19 @@ const InchesToMM = () => {
                 n: "Niche Cross",
                 g: "Glass",
                 fi: "Figure",
+                dr: "Drawer"
               };
-
               if (typeof newValue === "string") {
                 const match = newValue.match(/^([a-z]+)?\.?(\d+)?$/i);
                 let text = "";
                 let number = "";
 
                 if (match) {
-                  const key = match[1]?.toLowerCase(); // Optional letter
-                  const num = match[2]; // Optional number
+                  const key = match[1]?.toLowerCase();
+                  const num = match[2];
 
                   if (key && placeholderMap[key]) {
-                    text = placeholderMap[key]; // Get placeholder text
+                    text = placeholderMap[key];
                   }
 
                   if (num && ["1", "2", "3", "5"].includes(num)) {
@@ -877,23 +732,28 @@ const InchesToMM = () => {
                   newData[row][col] = newValue;
                 }
               } else {
-                // Fallback for non-string newValue
                 newData[row][col] = newValue;
               }
             } else {
-              // Directly update other columns without special handling
               newData[row][col] = newValue;
             }
-
-            // Sync dependent columns for WEIGHT and HEIGHT
-            if (col === 0) {
-              newData[row][4] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
-            }
-            if (col === 1) {
-              newData[row][5] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
-            }
-            if (col === 2) {
-              newData[row][6] = newValue; // Sync PCS column
+            if (!isSpecialValue) {
+              if (col === 0) {
+                newData[row][4] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
+              }
+              if (col === 1) {
+                newData[row][5] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
+              }
+              if (col === 2) {
+                newData[row][6] = newValue;
+              }
+            } else {
+              if (col === 0) {
+                newData[row][4] = "";
+              }
+              if (col === 1) {
+                newData[row][5] = "";
+              }
             }
           }
         });
@@ -984,6 +844,7 @@ const InchesToMM = () => {
       /\.(png|jpe?g|svg)$/
     )
   );
+
   const [isLuminateFieldVisible, setIsLuminateFieldVisible] = useState(false);
 
   const colorOptions = useMemo(() => {
@@ -997,20 +858,15 @@ const InchesToMM = () => {
     return options;
   }, [colorImages]);
 
-
-  useEffect(() => {
-    const storedColor = localStorage.getItem("selectedColor");
-    if (storedColor) {
-      setSelectedColor(storedColor);
-    }
-  }, []);
-
   const handleColorSelect = (code) => {
     setSelectedColor(code);
+
     if (code === "Blank") {
       setIsLuminateFieldVisible(true);
+      setLuminate("");
     } else {
       setIsLuminateFieldVisible(false);
+      setLuminate("");
     }
   };
 
@@ -1064,7 +920,8 @@ const InchesToMM = () => {
             />
           </div>
           <div style={{ width: "50%" }}> <div className="ms-4 mb-2">
-            <Label>Color Code:</Label> <div className="dropdown" ref={dropdownRef}>
+            <Label>Color Code:</Label>
+            <div className="dropdown" ref={dropdownRef}>
               <Input type="text"
                 readOnly value={selectedColor.split(".")[0]}
                 onClick={() => setIsOpen(!isOpen)}
@@ -1080,8 +937,41 @@ const InchesToMM = () => {
                     margin: "0px",
                     transform: "translate(0px, 38px)",
                   }} >
-                  {colorOptions.map((option) => (<button key={option.code} className="dropdown-item" onClick={() => handleColorSelect(option.code)} > {option.imageSrc && (<img src={option.imageSrc} alt={option.code} style={{ width: "30px", height: "30px", marginRight: "10px", objectFit: "cover", }} />)} {option.code.split(".")[0]} </button>))} </div>)} </div> </div> {selectedColor && (<div className="ms-4"> {selectedColor !== "Blank" ? (<img src={colorImages[`${selectedColor.replace(" ", "_")}`]} alt={selectedColor} style={{ height: "138px", objectFit: "contain", }} />) : null} </div>)} {isLuminateFieldVisible && (<div className="ms-4 mt-2"> <Label>Luminate No:</Label> <Input type="text" className="form-control" /> </div>)} </div>
+                  {colorOptions.map((option) => (<button key={option.code}
+                    className="dropdown-item"
+                    onClick={() => handleColorSelect(option.code)} >
+                    {option.imageSrc && (<img src={option.imageSrc}
+                      alt={option.code}
+                      style={{
+                        width: "30px",
+                        height: "30px",
+                        marginRight: "10px",
+                        objectFit: "cover",
+                      }} />)}
+                    {option.code.split(".")[0]}
+                  </button>))} </div>)}
+            </div>
+          </div>
+            {selectedColor && (<div className="ms-4">
+              {selectedColor !== "Blank" ? (<img src={colorImages[`${selectedColor.replace(" ", "_")}`]}
+                alt={selectedColor}
+                style={{
+                  height: "138px",
+                  objectFit: "contain",
+                }} />) : null} </div>)}
+            {isLuminateFieldVisible && (
+              <div className="ms-4 mt-2">
+                <Label>Luminate No:</Label>
+                <Input
+                  type="text"
+                  className="form-control"
+                  value={luminate}
+                  onChange={(e) => setLuminate(e.target.value)}
+                />
+              </div>
+            )}
 
+          </div>
         </div>
 
         <Button className="mb-2 me-2" color="primary" onClick={addColumn}>
@@ -1090,9 +980,10 @@ const InchesToMM = () => {
         <Button className="mb-2 ml-2 me-2" color="primary" onClick={addRow}>
           Add Row
         </Button>
-        <Button className="mb-2 me-2" color="success" onClick={workPDF}>
+        {!isSpecial ? <Button className="mb-2 me-2" color="success" onClick={workPDF}>
           Work PDF
-        </Button>
+        </Button> : ""}
+
         <Button className="mb-2 me-2" color="success" onClick={normalPDF}>
           Normal PDF
         </Button>
@@ -1139,31 +1030,49 @@ const InchesToMM = () => {
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}
           rowHeaders={(index) => {
-            // Return serial number starting from 1 for the second row onward
-            return index > 0 ? `${index}` : '';
+            return index === 0 ? "SR No" : `${index}`;
           }}
-          // rowHeaders={true}
-          width="100%"
-          height="800"
+          width="auto"
+          height="auto"
           stretchH="all"
           licenseKey="non-commercial-and-evaluation"
           afterChange={handleTableChange}
           cells={(row, col, prop) => {
             const cellProperties = {};
-            const value = tableData[row] ? tableData[row][col] : "";
+            const rowData = tableData[row] || [];
+            const containsSpecialValue = rowData.some(
+              (cellValue) => /aw/i.test(cellValue) || cellValue === "+"
+            );
 
-            const placeholderMap = {
-              c: "Cross",
-              f: "Fix",
-              p: "Profile",
-              j: "J Cross",
-              d: "D Cross",
-              u: "Upar Cross",
-              n: "Niche Cross",
-              g: "Glass",
-              fi: "figure"
-            };
-            if (col === 3) {
+            if (containsSpecialValue) {
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.style.backgroundColor = "#ffeb3b";
+                td.style.fontWeight = "bold";
+                td.textContent = value || "";
+              };
+            } else if (row === 0) {
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.style.backgroundColor = "#059862";
+                td.style.fontWeight = "bold";
+                td.textContent = value;
+              };
+            }
+
+            if (col === 3 && row > 0 && !containsSpecialValue) {
               cellProperties.renderer = (
                 instance,
                 td,
@@ -1176,6 +1085,19 @@ const InchesToMM = () => {
                 const match = value?.match(/^([a-z]+)?\.?(\d+)?$/i);
                 let text = "";
                 let imageNumber = "";
+
+                const placeholderMap = {
+                  c: "Cross",
+                  f: "Fix",
+                  p: "Profile",
+                  j: "J Cross",
+                  d: "D Cross",
+                  u: "Upar Cross",
+                  n: "Niche Cross",
+                  g: "Glass",
+                  fi: "Figure",
+                  dr: "Drawer"
+                };
 
                 if (match) {
                   const key = match[1]?.toLowerCase();
@@ -1204,12 +1126,10 @@ const InchesToMM = () => {
                 }
               };
             }
+
             return cellProperties;
           }}
         />
-
-
-
 
       </div>
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { HotTable } from "@handsontable/react";
 import { registerAllModules } from 'handsontable/registry';
@@ -35,6 +35,9 @@ const MMToMM = () => {
   const [edge, setEdge] = useState(0);
   const [field1, setField1] = useState(tools.toString());
   const [field2, setField2] = useState(edge.toString());
+  const [isLuminateFieldVisible, setIsLuminateFieldVisible] = useState(false);
+  const [luminate, setLuminate] = useState("");
+
   registerAllModules();
   const arrowMap = {
     1: leftArrow,
@@ -45,7 +48,7 @@ const MMToMM = () => {
 
   const [tableData, setTableData] = useState([
     ["WIDTH", "HEIGHT", "PCS", "REMARK", "WIDTH(MM)", "HEIGHT(MM)", "PCS"],
-    ...Array(100).fill(["", "", "", "", "", "", ""]),
+    ...Array(300).fill(["", "", "", "", "", "", ""]),
   ]);
 
   const formatDateToDMY = (date) => {
@@ -151,8 +154,8 @@ const MMToMM = () => {
   };
 
   const addRow = () => {
-    const newRow = Array(tableData[0].length).fill("");
-    setTableData((prevData) => [...prevData, newRow]);
+    const newRows = Array(50).fill(Array(tableData[0].length).fill(""));
+    setTableData((prevData) => [...prevData, ...newRows]);
   };
 
   const downloadExcel = () => {
@@ -215,6 +218,10 @@ const MMToMM = () => {
       doc.text(`Client: ${clientName}`, 10, 20);
       doc.text(`Book: ${book}`, 10, 30);
 
+      if (luminate) {
+        doc.text(`Luminate No: ${luminate}`, 10, 40);
+      }
+
       const selectedColorImage =
         colorImages[selectedColor.replace(" ", "_")] || null;
       let colorImageBase64 = null;
@@ -225,8 +232,8 @@ const MMToMM = () => {
       let imageYPosition = 0;
 
       if (colorImageBase64) {
-        const imageWidth = 50;
-        const imageHeight = 70;
+        const imageWidth = 40;
+        const imageHeight = 50;
         const imageXPosition = 130;
 
         doc.addImage(
@@ -237,14 +244,12 @@ const MMToMM = () => {
           imageWidth,
           imageHeight
         );
-
-        const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-        doc.text(colorCodeText, imageXPosition, imageHeight + 5);
       }
 
-      let tableStartY = 40;
+      let tableStartY = luminate ? 40 : 30;
       if (colorImageBase64) {
-        tableStartY = imageYPosition + 80;
+        doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
+        tableStartY = luminate ? 65 : 55;
       }
 
       const filteredData = safeTableData
@@ -359,6 +364,10 @@ const MMToMM = () => {
       doc.text(`Client: ${clientName}`, 10, 20);
       doc.text(`Book: ${book}`, 10, 30);
 
+      if (luminate) {
+        doc.text(`Luminate No: ${luminate}`, 10, 40);
+      }
+
       const selectedColorImage =
         colorImages[selectedColor.replace(" ", "_")] || null;
       let colorImageBase64 = null;
@@ -369,8 +378,8 @@ const MMToMM = () => {
       let imageYPosition = 0;
 
       if (colorImageBase64) {
-        const imageWidth = 50;
-        const imageHeight = 70;
+        const imageWidth = 40;
+        const imageHeight = 50;
         const imageXPosition = 130;
 
         doc.addImage(
@@ -381,13 +390,12 @@ const MMToMM = () => {
           imageWidth,
           imageHeight
         );
-        const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-        doc.text(colorCodeText, imageXPosition, imageHeight + 5);
       }
 
-      let tableStartY = 40;
+      let tableStartY = luminate ? 40 : 30;
       if (colorImageBase64) {
-        tableStartY = imageYPosition + 80;
+        doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
+        tableStartY = luminate ? 65 : 55;
       }
 
       const filteredData = safeTableData
@@ -474,6 +482,49 @@ const MMToMM = () => {
     return (numericValue + batchNumber).toFixed(1);
   };
 
+  const importFile = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".xlsx, .xls";
+    input.style.display = "none";
+
+    input.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert to array of arrays
+
+        if (jsonData.length > 1) {
+          const [, ...rows] = jsonData; // Skip the first row (headers) and get the remaining rows
+          const updatedData = [
+            ...tableData.slice(0, 1), // Keep the original header row
+            ...rows, // Add the rows from the Excel file
+            ...Array(300 - rows.length).fill(["", "", "", "", "", "", ""]), // Fill remaining rows with empty data
+          ];
+
+          setTableData(updatedData);
+
+          // Trigger handleTableChange for imported rows
+          rows.forEach((rowData, rowIndex) => {
+            const row = rowIndex + 1; // Adjust for headers
+            rowData.forEach((cellValue, colIndex) => {
+              handleTableChange([[row, colIndex, tableData[row]?.[colIndex], cellValue]], "import");
+            });
+          });
+        }
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+    input.click();
+  };
 
   const handleTableChange = (changes, source) => {
     if (changes && source !== "loadData") {
@@ -481,6 +532,8 @@ const MMToMM = () => {
         const newData = JSON.parse(JSON.stringify(prevData));
         changes.forEach(([row, col, oldValue, newValue]) => {
           if (newValue !== oldValue) {
+            const isSpecialValue = /aw/i.test(newValue) || newValue === "+";
+
             newData[row][col] = newValue;
             if (col === 0) {
               if (!newValue || newValue.trim() === "") {
@@ -523,7 +576,26 @@ const MMToMM = () => {
 
             }
             newData[row][6] = newData[row][2];
+            if (!isSpecialValue) {
+              if (col === 0) {
+                newData[row][4] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
+              }
+              if (col === 1) {
+                newData[row][5] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
+              }
+              if (col === 2) {
+                newData[row][6] = newValue;
+              }
+            } else {
+              if (col === 0) {
+                newData[row][4] = "";
+              }
+              if (col === 1) {
+                newData[row][5] = "";
+              }
+            }
           }
+
         });
         return newData;
       });
@@ -554,24 +626,26 @@ const MMToMM = () => {
   );
 
   const colorOptions = useMemo(() => {
-    return Object.keys(colorImages)
+    const options = Object.keys(colorImages)
       .filter((key) => key.startsWith("AW_"))
       .map((key) => ({
         code: key.replace("AW_", "AW "),
         imageSrc: colorImages[key],
       }));
+    options.push({ code: "Blank", imageSrc: null });
+    return options;
   }, [colorImages]);
 
-  useEffect(() => {
-    const storedColor = localStorage.getItem("selectedColor");
-    if (storedColor) {
-      setSelectedColor(storedColor);
-    }
-  }, []);
   const handleColorSelect = (code) => {
     setSelectedColor(code);
-    setIsOpen(false);
-    localStorage.setItem("selectedColor", code);
+
+    if (code === "Blank") {
+      setIsLuminateFieldVisible(true);
+      setLuminate("");
+    } else {
+      setIsLuminateFieldVisible(false);
+      setLuminate("");
+    }
   };
 
   const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
@@ -580,6 +654,20 @@ const MMToMM = () => {
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
   };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+  const dropdownRef = useRef(null);
 
   return (
     <React.Fragment>
@@ -616,65 +704,58 @@ const MMToMM = () => {
               className="mb-3"
             />
           </div>
-          <div style={{ width: "50%" }}>
-            <div className="ms-4 mb-2">
-              <Label>Color Code:</Label>
-              <div className="dropdown ">
+          <div style={{ width: "50%" }}> <div className="ms-4 mb-2">
+            <Label>Color Code:</Label>
+            <div className="dropdown" ref={dropdownRef}>
+              <Input type="text"
+                readOnly value={selectedColor.split(".")[0]}
+                onClick={() => setIsOpen(!isOpen)}
+                className="form-control dropdown-toggle cursor-pointer" />
+              {isOpen && (
+                <div className="dropdown-menu show"
+                  style={{
+                    maxHeight: "40vh",
+                    overflow: "auto",
+                    display: "block",
+                    position: "absolute",
+                    inset: "0px auto auto 0px",
+                    margin: "0px",
+                    transform: "translate(0px, 38px)",
+                  }} >
+                  {colorOptions.map((option) => (<button key={option.code}
+                    className="dropdown-item"
+                    onClick={() => handleColorSelect(option.code)} >
+                    {option.imageSrc && (<img src={option.imageSrc}
+                      alt={option.code}
+                      style={{
+                        width: "30px",
+                        height: "30px",
+                        marginRight: "10px",
+                        objectFit: "cover",
+                      }} />)}
+                    {option.code.split(".")[0]}
+                  </button>))} </div>)}
+            </div>
+          </div>
+            {selectedColor && (<div className="ms-4">
+              {selectedColor !== "Blank" ? (<img src={colorImages[`${selectedColor.replace(" ", "_")}`]}
+                alt={selectedColor}
+                style={{
+                  height: "138px",
+                  objectFit: "contain",
+                }} />) : null} </div>)}
+            {isLuminateFieldVisible && (
+              <div className="ms-4 mt-2">
+                <Label>Luminate No:</Label>
                 <Input
                   type="text"
-                  readOnly
-                  value={selectedColor.split(".")[0]}
-                  onClick={() => setIsOpen(!isOpen)}
-                  className="form-control dropdown-toggle cursor-pointer"
-                />
-                {isOpen && (
-                  <div
-                    className="dropdown-menu show"
-                    style={{
-                      maxHeight: "40vh",
-                      overflow: "auto",
-                      display: "block",
-                      position: "absolute",
-                      inset: "0px auto auto 0px",
-                      margin: "0px",
-                      transform: "translate(0px, 38px)",
-                    }}
-                  >
-                    {colorOptions.map((option) => (
-                      <button
-                        key={option.code}
-                        className="dropdown-item"
-                        onClick={() => handleColorSelect(option.code)}
-                      >
-                        <img
-                          src={option.imageSrc}
-                          alt={option.code}
-                          style={{
-                            width: "30px",
-                            height: "30px",
-                            marginRight: "10px",
-                            objectFit: "cover",
-                          }}
-                        />
-                        {option.code.split(".")[0]}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            {selectedColor && (
-              <div className="ms-4">
-                <img
-                  src={colorImages[`${selectedColor.replace(" ", "_")}`]}
-                  alt={selectedColor}
-                  style={{
-                    height: "138px",
-                    objectFit: "contain",
-                  }}
+                  className="form-control"
+                  value={luminate}
+                  onChange={(e) => setLuminate(e.target.value)}
                 />
               </div>
             )}
+
           </div>
         </div>
 
@@ -689,6 +770,13 @@ const MMToMM = () => {
         </Button>
         <Button className="mb-2 me-2" color="info" onClick={downloadPDF}>
           Download PDF
+        </Button>
+        <Button
+          className="mb-2 me-2"
+          color="success"
+          onClick={importFile}
+        >
+          Import
         </Button>
         <Button className="mb-2 me-2" color="warning" onClick={printPDF}>
           Print PDF
@@ -711,6 +799,115 @@ const MMToMM = () => {
           Batch Number: {batchNumber}
         </Tooltip>
         <HotTable
+          data={JSON.parse(JSON.stringify(tableData))}
+          colHeaders={true}
+          rowHeaders={(index) => {
+            return index === 0 ? "SR No" : `${index}`;
+          }}
+          width="auto"
+          height="auto"
+          stretchH="all"
+          licenseKey="non-commercial-and-evaluation"
+          afterChange={handleTableChange}
+          cells={(row, col, prop) => {
+            const cellProperties = {};
+            const rowData = tableData[row] || []; // Get the current row data
+            const value = rowData[col] || ""; // Get the value of the current cell
+
+            // Check if any cell in the row contains "aw" (case-insensitive) or "+"
+            const containsSpecialValue = rowData.some(
+              (cellValue) => /aw/i.test(cellValue) || cellValue === "+"
+            );
+
+            if (containsSpecialValue) {
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.style.backgroundColor = "#ffeb3b"; // Highlight the row with yellow background
+                td.style.fontWeight = "bold"; // Optional: Make the text bold
+                td.textContent = value || ""; // Set the cell content
+              };
+            } else if (row === 0) {
+              // Set header row styling
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.style.backgroundColor = "#059862";
+                td.style.fontWeight = "bold";
+                td.textContent = value;
+              };
+            }
+
+            if (col === 3 && row > 0 && !containsSpecialValue) {
+              // Custom renderer for column 3, if not part of a highlighted row
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.innerHTML = "";
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?$/i);
+                let text = "";
+                let imageNumber = "";
+
+                const placeholderMap = {
+                  c: "Cross",
+                  f: "Fix",
+                  p: "Profile",
+                  j: "J Cross",
+                  d: "D Cross",
+                  u: "Upar Cross",
+                  n: "Niche Cross",
+                  g: "Glass",
+                  fi: "Figure",
+                  dr: "Drawer"
+                };
+
+                if (match) {
+                  const key = match[1]?.toLowerCase();
+                  const number = match[2];
+                  if (key && placeholderMap[key]) {
+                    text = placeholderMap[key];
+                  }
+                  if (number && ["1", "2", "3", "5"].includes(number)) {
+                    imageNumber = number;
+                  }
+                }
+                if (text) {
+                  td.textContent = text;
+                }
+
+                if (imageNumber) {
+                  const img = document.createElement("img");
+                  img.src = arrowMap[imageNumber];
+                  img.style.maxWidth = "20px";
+                  img.style.maxHeight = "20px";
+                  img.style.marginLeft = "8px";
+                  td.appendChild(img);
+                }
+                if (!text && !imageNumber) {
+                  td.textContent = value || "";
+                }
+              };
+            }
+
+            return cellProperties;
+          }}
+        />
+        {/* <HotTable
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}
           rowHeaders={true}
@@ -744,7 +941,7 @@ const MMToMM = () => {
             }
             return cellProperties;
           }}
-        />
+        /> */}
       </div>
       <Modal isOpen={isModalOpen} toggle={toggleModal}>
         <ModalHeader toggle={toggleModal}>Add Batch Number</ModalHeader>

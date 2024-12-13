@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { HotTable } from "@handsontable/react";
 import { registerAllModules } from 'handsontable/registry';
@@ -8,8 +8,6 @@ import {
   Input,
   Label,
 } from "reactstrap";
-import { getDocs, collection } from "firebase/firestore";
-import { db } from "../../firebase";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
@@ -34,7 +32,7 @@ const ClientMenu = () => {
 
   const [tableData, setTableData] = useState([
     ["WIDTH", "HEIGHT", "PCS", "REMARK"],
-    ...Array(100).fill(["", "", "", ""]),
+    ...Array(300).fill(["", "", "", ""]),
   ]);
 
   const formatDateToDMY = (date) => {
@@ -48,6 +46,9 @@ const ClientMenu = () => {
   const [date, setDate] = useState(formatDateToDMY(new Date()));
   const [clientName, setClientName] = useState("");
   const [book, setBook] = useState("");
+  const [isLuminateFieldVisible, setIsLuminateFieldVisible] = useState(false);
+  const [luminate, setLuminate] = useState("");
+  const [selectedUnit, setSelectedUnit] = useState("Inches");
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("userData"));
@@ -74,18 +75,22 @@ const ClientMenu = () => {
   };
 
   const addRow = () => {
-    const newRow = Array(tableData[0].length).fill("");
-    setTableData((prevData) => [...prevData, newRow]);
+    const newRows = Array(50).fill(Array(tableData[0].length).fill(""));
+
+    setTableData((prevData) => [...prevData, ...newRows]);
   };
 
   const downloadExcel = () => {
-    const ws = XLSX.utils.aoa_to_sheet(
-      [...tableData,],
-    );
+    const sanitizedUnit = selectedUnit.toLowerCase();
+    const sanitizedClientName = clientName?.toString().toLowerCase() || "client";
+    const fileName = `${sanitizedClientName}_${date}_${sanitizedUnit}.xlsx`;
+
+    const ws = XLSX.utils.aoa_to_sheet([...tableData]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    XLSX.writeFile(wb, "table_data.xlsx");
+    XLSX.writeFile(wb, fileName);
   };
+
 
   const fetchImageAsBase64 = async (imagePath) => {
     return new Promise((resolve, reject) => {
@@ -136,118 +141,19 @@ const ClientMenu = () => {
       doc.text(`Client: ${clientName}`, 10, 20);
       doc.text(`Book: ${book}`, 10, 30);
 
-      const selectedColorImage =
-        colorImages[selectedColor.replace(" ", "_")] || null;
-      let colorImageBase64 = null;
-      if (selectedColorImage) {
-        colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
+      doc.text(`Unit: ${selectedUnit}`, 10, 40); // Add selected unit to PDF
+
+      if (luminate) {
+        doc.text(`Luminate No: ${luminate}`, 10, 50);
       }
-
-      let imageYPosition = 0;
-
-      if (colorImageBase64) {
-        const imageWidth = 50;
-        const imageHeight = 70;
-        const imageXPosition = 130;
-
-        doc.addImage(
-          colorImageBase64,
-          "PNG",
-          imageXPosition,
-          0,
-          imageWidth,
-          imageHeight
-        );
-
-        const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-        doc.text(colorCodeText, imageXPosition, imageHeight + 5);
-      }
-
-      let tableStartY = 40;
-      if (colorImageBase64) {
-        tableStartY = imageYPosition + 80;
-      }
-
-      const filteredData = safeTableData
-        .slice(1)
-        .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
-
-      const pcsIndex = safeTableData[0].indexOf("PCS");
-
-      const totalPCS = filteredData.reduce((sum, row) => {
-        const pcsValue = parseFloat(row[pcsIndex]) || 0;
-        return sum + pcsValue;
-      }, 0);
-
-      const arrowImages = {
-        1: await fetchImageAsBase64(leftArrow),
-        2: await fetchImageAsBase64(downArrow),
-        3: await fetchImageAsBase64(rightArrow),
-        5: await fetchImageAsBase64(upArrow),
-      };
-
-      const processedData = filteredData.map((row) => {
-        return row.map((cell) => {
-          if (["1", "2", "3", "5"].includes(cell)) {
-            return cell;
-          }
-          return cell;
-        });
-      });
-      const serialData = processedData.map((row, index) => [index + 1, ...row]);
-
-      const headers = ["S. No", ...safeTableData[0]];
-
-      doc.autoTable({
-        head: [headers],
-        body: serialData,
-        startY: tableStartY,
-        styles: { fontSize: 10 },
-        theme: "grid",
-        headStyles: { fillColor: [22, 160, 133] },
-        margin: { top: tableStartY },
-        didDrawCell: (data) => {
-          if (!data || !data.row || !data.cell) return;
-
-          const cellText = data.cell.text[0];
-          const arrowImagePath = arrowImages[cellText];
-
-          if (arrowImagePath && data.column.index === 4) {
-            doc.setFillColor(255, 255, 255);
-            doc.rect(
-              data.cell.x,
-              data.cell.y,
-              data.cell.width,
-              data.cell.height,
-              "F"
-            );
-
-            const cellWidth = data.cell.width;
-            const cellHeight = data.cell.height;
-            const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
-            const imageWidth = maxImageSize;
-            const imageHeight = maxImageSize;
-
-            doc.addImage(
-              arrowImagePath,
-              "PNG",
-              data.cell.x + (cellWidth - imageWidth) / 2,
-              data.cell.y + (cellHeight - imageHeight) / 2,
-              imageWidth,
-              imageHeight
-            );
-          }
-        },
-      });
-
-      const finalY = doc.lastAutoTable.finalY + 10;
-      doc.setFont("helvetica", "bold");
-      doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
 
       const sanitizedClientName = clientName.toString().toLowerCase();
-      doc.save(`${sanitizedClientName}_${date}.pdf`);
+      const sanitizedUnit = selectedUnit.toLowerCase();
+
+      doc.save(`${sanitizedClientName}_${date}_${sanitizedUnit}.pdf`);
     }
   };
+
 
   const printPDF = async () => {
     if (!clientName) {
@@ -280,6 +186,10 @@ const ClientMenu = () => {
       doc.text(`Client: ${clientName}`, 10, 20);
       doc.text(`Book: ${book}`, 10, 30);
 
+      if (luminate) {
+        doc.text(`Luminate No: ${luminate}`, 10, 40);
+      }
+
       const selectedColorImage =
         colorImages[selectedColor.replace(" ", "_")] || null;
       let colorImageBase64 = null;
@@ -290,8 +200,8 @@ const ClientMenu = () => {
       let imageYPosition = 0;
 
       if (colorImageBase64) {
-        const imageWidth = 50;
-        const imageHeight = 70;
+        const imageWidth = 40;
+        const imageHeight = 50;
         const imageXPosition = 130;
 
         doc.addImage(
@@ -302,14 +212,12 @@ const ClientMenu = () => {
           imageWidth,
           imageHeight
         );
-
-        const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-        doc.text(colorCodeText, imageXPosition, imageHeight + 5);
       }
 
-      let tableStartY = 40;
+      let tableStartY = luminate ? 40 : 30;
       if (colorImageBase64) {
-        tableStartY = imageYPosition + 80;
+        doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
+        tableStartY = luminate ? 65 : 55;
       }
 
       const filteredData = safeTableData
@@ -402,6 +310,7 @@ const ClientMenu = () => {
       window.open(doc.output("bloburl"));
     }
   };
+
   const importFile = () => {
     const input = document.createElement("input");
     input.type = "file";
@@ -425,7 +334,7 @@ const ClientMenu = () => {
           const [, ...rows] = jsonData; // Skip the first row (headers) and get the remaining rows
 
           // Ensure that we do not pass a negative value to Array
-          const emptyRowsToAdd = Math.max(0, 100 - rows.length);
+          const emptyRowsToAdd = Math.max(0, 300 - rows.length);
 
           const updatedData = [
             ...tableData.slice(0, 1), // Keep the original header row
@@ -540,6 +449,7 @@ const ClientMenu = () => {
 
   const [selectedColor, setSelectedColor] = useState("AW_301");
   const [isOpen, setIsOpen] = useState(false);
+
   const importAll = (r) => {
     let images = {};
     r.keys().forEach((item) => {
@@ -556,25 +466,41 @@ const ClientMenu = () => {
   );
 
   const colorOptions = useMemo(() => {
-    return Object.keys(colorImages)
+    const options = Object.keys(colorImages)
       .filter((key) => key.startsWith("AW_"))
       .map((key) => ({
         code: key.replace("AW_", "AW "),
         imageSrc: colorImages[key],
       }));
+    options.push({ code: "Blank", imageSrc: null });
+    return options;
   }, [colorImages]);
 
-  useEffect(() => {
-    const storedColor = localStorage.getItem("selectedColor");
-    if (storedColor) {
-      setSelectedColor(storedColor);
-    }
-  }, []);
   const handleColorSelect = (code) => {
     setSelectedColor(code);
-    setIsOpen(false);
-    localStorage.setItem("selectedColor", code);
+
+    if (code === "Blank") {
+      setIsLuminateFieldVisible(true);
+      setLuminate("");
+    } else {
+      setIsLuminateFieldVisible(false);
+      setLuminate("");
+    }
   };
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+  const dropdownRef = useRef(null);
 
   return (
     <React.Fragment>
@@ -610,66 +536,72 @@ const ClientMenu = () => {
               onChange={(e) => setBook(e.target.value)}
               className="mb-3"
             />
+            <div className="mb-3">
+              <label htmlFor="unitSelect" className="form-label">Select Unit</label>
+              <select
+                id="unitSelect"
+                className="form-select"
+                value={selectedUnit}
+                onChange={(e) => setSelectedUnit(e.target.value)}
+              >
+                <option value="Inches">Inches</option>
+                <option value="MM">MM</option>
+              </select>
+            </div>
+
           </div>
-          <div style={{ width: "50%" }}>
-            <div className="ms-4 mb-2">
-              <Label>Color Code:</Label>
-              <div className="dropdown ">
+          <div style={{ width: "50%" }}> <div className="ms-4 mb-2">
+            <Label>Color Code:</Label>
+            <div className="dropdown" ref={dropdownRef}>
+              <Input type="text"
+                readOnly value={selectedColor.split(".")[0]}
+                onClick={() => setIsOpen(!isOpen)}
+                className="form-control dropdown-toggle cursor-pointer" />
+              {isOpen && (
+                <div className="dropdown-menu show"
+                  style={{
+                    maxHeight: "40vh",
+                    overflow: "auto",
+                    display: "block",
+                    position: "absolute",
+                    inset: "0px auto auto 0px",
+                    margin: "0px",
+                    transform: "translate(0px, 38px)",
+                  }} >
+                  {colorOptions.map((option) => (<button key={option.code}
+                    className="dropdown-item"
+                    onClick={() => handleColorSelect(option.code)} >
+                    {option.imageSrc && (<img src={option.imageSrc}
+                      alt={option.code}
+                      style={{
+                        width: "30px",
+                        height: "30px",
+                        marginRight: "10px",
+                        objectFit: "cover",
+                      }} />)}
+                    {option.code.split(".")[0]}
+                  </button>))} </div>)}
+            </div>
+          </div>
+            {selectedColor && (<div className="ms-4">
+              {selectedColor !== "Blank" ? (<img src={colorImages[`${selectedColor.replace(" ", "_")}`]}
+                alt={selectedColor}
+                style={{
+                  height: "138px",
+                  objectFit: "contain",
+                }} />) : null} </div>)}
+            {isLuminateFieldVisible && (
+              <div className="ms-4 mt-2">
+                <Label>Luminate No:</Label>
                 <Input
                   type="text"
-                  readOnly
-                  value={selectedColor.split(".")[0]}
-                  onClick={() => setIsOpen(!isOpen)}
-                  className="form-control dropdown-toggle cursor-pointer"
-                />
-                {isOpen && (
-                  <div
-                    className="dropdown-menu show"
-                    style={{
-                      maxHeight: "40vh",
-                      overflow: "auto",
-                      display: "block",
-                      position: "absolute",
-                      inset: "0px auto auto 0px",
-                      margin: "0px",
-                      transform: "translate(0px, 38px)",
-                    }}
-                  >
-                    {colorOptions.map((option) => (
-                      <button
-                        key={option.code}
-                        className="dropdown-item"
-                        onClick={() => handleColorSelect(option.code)}
-                      >
-                        <img
-                          src={option.imageSrc}
-                          alt={option.code}
-                          style={{
-                            width: "20px",
-                            height: "20px",
-                            marginRight: "10px",
-                            objectFit: "cover",
-                          }}
-                        />
-                        {option.code.split(".")[0]}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            {selectedColor && (
-              <div className="ms-4">
-                <img
-                  src={colorImages[`${selectedColor.replace(" ", "_")}`]}
-                  alt={selectedColor}
-                  style={{
-                    height: "138px",
-                    objectFit: "contain",
-                  }}
+                  className="form-control"
+                  value={luminate}
+                  onChange={(e) => setLuminate(e.target.value)}
                 />
               </div>
             )}
+
           </div>
         </div>
 
@@ -699,36 +631,104 @@ const ClientMenu = () => {
         <HotTable
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}
-          rowHeaders={true}
+          rowHeaders={(index) => {
+            return index === 0 ? "SR No" : `${index}`;
+          }}
           width="auto"
           height="auto"
-
           stretchH="all"
           licenseKey="non-commercial-and-evaluation"
           afterChange={handleTableChange}
           cells={(row, col, prop) => {
             const cellProperties = {};
-            if (col === 3) {
-              const value = tableData[row] ? tableData[row][col] : "";
-              if (["1", "2", "3", "5"].includes(value)) {
-                cellProperties.renderer = (
-                  instance,
-                  td,
-                  row,
-                  col,
-                  prop,
-                  value,
-                  cellProperties
-                ) => {
-                  td.innerHTML = "";
+            const rowData = tableData[row] || [];
+            const containsSpecialValue = rowData.some(
+              (cellValue) => /aw/i.test(cellValue) || cellValue === "+"
+            );
+
+            if (containsSpecialValue) {
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.style.backgroundColor = "#ffeb3b";
+                td.style.fontWeight = "bold";
+                td.textContent = value || "";
+              };
+            } else if (row === 0) {
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.style.backgroundColor = "#059862";
+                td.style.fontWeight = "bold";
+                td.textContent = value;
+              };
+            }
+
+            if (col === 3 && row > 0 && !containsSpecialValue) {
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.innerHTML = "";
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?$/i);
+                let text = "";
+                let imageNumber = "";
+
+                const placeholderMap = {
+                  c: "Cross",
+                  f: "Fix",
+                  p: "Profile",
+                  j: "J Cross",
+                  d: "D Cross",
+                  u: "Upar Cross",
+                  n: "Niche Cross",
+                  g: "Glass",
+                  fi: "Figure",
+                  dr: "Drawer"
+                };
+
+                if (match) {
+                  const key = match[1]?.toLowerCase();
+                  const number = match[2];
+                  if (key && placeholderMap[key]) {
+                    text = placeholderMap[key];
+                  }
+                  if (number && ["1", "2", "3", "5"].includes(number)) {
+                    imageNumber = number;
+                  }
+                }
+                if (text) {
+                  td.textContent = text;
+                }
+
+                if (imageNumber) {
                   const img = document.createElement("img");
-                  img.src = arrowMap[value];
+                  img.src = arrowMap[imageNumber];
                   img.style.maxWidth = "20px";
                   img.style.maxHeight = "20px";
+                  img.style.marginLeft = "8px";
                   td.appendChild(img);
-                };
-              }
+                }
+                if (!text && !imageNumber) {
+                  td.textContent = value || "";
+                }
+              };
             }
+
             return cellProperties;
           }}
         />

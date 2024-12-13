@@ -46,21 +46,9 @@ const Sidebar = ({ layoutType }) => {
             <span className="logo-sm">
               <img src={logoSm} alt="" height="40" />
             </span>
-            <span className="logo-lg">
-              <img src={logoLight} alt="" height="58" />
+            <span className="">
+              <img src={logoLight} alt="" height="28" />
             </span>
-            {/* <span style={{ color: "#ff821c", fontFamily: "doto", fontSize: "40px" }}>
-              A
-            </span>
-            <span style={{ color: "#343186", fontFamily: "doto", fontSize: "28px" }}>
-              PPLE
-            </span>
-            <span style={{ color: "#ff821c", fontFamily: "doto", fontSize: "40px", marginLeft: "4px" }}>
-              W
-            </span>
-            <span style={{ color: "#343186", fontFamily: "doto", fontSize: "28px" }}>
-              OOD
-            </span> */}
           </Link>
           <button
             onClick={addEventListenerOnSmHoverMenu}
