@@ -21,7 +21,7 @@ import * as Yup from "yup";
 import { useFormik } from "formik";
 import { enableLoading, disableLoading } from "../../slices/auth/login/reducer";
 import bcrypt from "bcryptjs";
-// import logoLight from "../../assets/images/logo-light.png";
+import logoLight from "../../assets/images/logo-light.png";
 import withRouter from "../../Components/Common/withRouter";
 
 // Define static username and password
@@ -104,7 +104,9 @@ const Login = () => {
             <Row className="mt-4">
               <Col lg={12}>
                 <div className="text-center mt-sm-5 mb-4 text-white-50 mt-3">
-
+                  <div className="mt-3">
+                    <img src={logoLight} alt="" height="60" />
+                  </div>
                   <p className="mt-3 fs-15">
                     {"Applewood designs customizable, high-quality modular furniture for modern, versatile spaces."}<br />
                   </p>

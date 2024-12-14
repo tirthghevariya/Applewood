@@ -47,7 +47,7 @@ const MMToMM = () => {
   };
 
   const [tableData, setTableData] = useState([
-    ["WIDTH", "HEIGHT", "PCS", "REMARK", "WIDTH(MM)", "HEIGHT(MM)", "PCS"],
+    ["WIDTH", "HEIGHT", "PCS", "REMARK", "REMARK 2", "WIDTH(MM)", "HEIGHT(MM)", "PCS"],
     ...Array(300).fill(["", "", "", "", "", "", ""]),
   ]);
 
@@ -164,10 +164,13 @@ const MMToMM = () => {
       [],
       ...tableData,
     ]);
+    const sanitizedClientName = clientName?.toString().toLowerCase() || "client";
+    const fileName = `${sanitizedClientName}_${date}_"mm".xlsx`;
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    XLSX.writeFile(wb, "table_data.xlsx");
+    XLSX.writeFile(wb, fileName);
   };
+
 
   const fetchImageAsBase64 = async (imagePath) => {
     return new Promise((resolve, reject) => {
@@ -537,19 +540,19 @@ const MMToMM = () => {
             newData[row][col] = newValue;
             if (col === 0) {
               if (!newValue || newValue.trim() === "") {
-                newData[row][4] = "";
-              } else {
-                newData[row][4] = convertValue(newValue, batchNumber);
-              }
-            }
-            if (col === 1) {
-              if (!newValue || newValue.trim() === "") {
                 newData[row][5] = "";
               } else {
                 newData[row][5] = convertValue(newValue, batchNumber);
               }
             }
-            if (col === 3) {
+            if (col === 1) {
+              if (!newValue || newValue.trim() === "") {
+                newData[row][6] = "";
+              } else {
+                newData[row][6] = convertValue(newValue, batchNumber);
+              }
+            }
+            if (col === 3 || col === 4) {
               if (newValue && ["1", "2", "3", "5"].includes(newValue)) {
                 newData[row][col] = newValue;
               } else if (newValue && newValue.startsWith("fi")) {
@@ -570,32 +573,30 @@ const MMToMM = () => {
                 newData[row][col] = "Upar Cross";
               } else if (newValue && newValue.startsWith("n")) {
                 newData[row][col] = "Niche Cross";
-              } else if (newValue && newValue.startsWith("dr")) {
+              } else if (newValue && newValue.startsWith("ar")) {
                 newData[row][col] = "Drawer"
               };
-
             }
-            newData[row][6] = newData[row][2];
+            newData[row][7] = newData[row][2];
             if (!isSpecialValue) {
               if (col === 0) {
-                newData[row][4] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
-              }
-              if (col === 1) {
                 newData[row][5] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
               }
+              if (col === 1) {
+                newData[row][6] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
+              }
               if (col === 2) {
-                newData[row][6] = newValue;
+                newData[row][7] = newValue;
               }
             } else {
               if (col === 0) {
-                newData[row][4] = "";
+                newData[row][5] = "";
               }
               if (col === 1) {
-                newData[row][5] = "";
+                newData[row][6] = "";
               }
             }
           }
-
         });
         return newData;
       });
@@ -646,6 +647,7 @@ const MMToMM = () => {
       setIsLuminateFieldVisible(false);
       setLuminate("");
     }
+    setIsOpen(false);
   };
 
   const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
@@ -707,12 +709,16 @@ const MMToMM = () => {
           <div style={{ width: "50%" }}> <div className="ms-4 mb-2">
             <Label>Color Code:</Label>
             <div className="dropdown" ref={dropdownRef}>
-              <Input type="text"
-                readOnly value={selectedColor.split(".")[0]}
+              <Input
+                type="text"
+                readOnly
+                value={selectedColor.split(".")[0]}
                 onClick={() => setIsOpen(!isOpen)}
-                className="form-control dropdown-toggle cursor-pointer" />
+                className="form-control dropdown-toggle cursor-pointer"
+              />
               {isOpen && (
-                <div className="dropdown-menu show"
+                <div
+                  className="dropdown-menu show"
                   style={{
                     maxHeight: "40vh",
                     overflow: "auto",
@@ -721,20 +727,31 @@ const MMToMM = () => {
                     inset: "0px auto auto 0px",
                     margin: "0px",
                     transform: "translate(0px, 38px)",
-                  }} >
-                  {colorOptions.map((option) => (<button key={option.code}
-                    className="dropdown-item"
-                    onClick={() => handleColorSelect(option.code)} >
-                    {option.imageSrc && (<img src={option.imageSrc}
-                      alt={option.code}
-                      style={{
-                        width: "30px",
-                        height: "30px",
-                        marginRight: "10px",
-                        objectFit: "cover",
-                      }} />)}
-                    {option.code.split(".")[0]}
-                  </button>))} </div>)}
+                  }}
+                >
+                  {colorOptions.map((option) => (
+                    <button
+                      key={option.code}
+                      className="dropdown-item"
+                      onClick={() => handleColorSelect(option.code)}
+                    >
+                      {option.imageSrc && (
+                        <img
+                          src={option.imageSrc}
+                          alt={option.code}
+                          style={{
+                            width: "30px",
+                            height: "30px",
+                            marginRight: "10px",
+                            objectFit: "cover",
+                          }}
+                        />
+                      )}
+                      {option.code.split(".")[0]}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
             {selectedColor && (<div className="ms-4">
@@ -811,12 +828,11 @@ const MMToMM = () => {
           afterChange={handleTableChange}
           cells={(row, col, prop) => {
             const cellProperties = {};
-            const rowData = tableData[row] || []; // Get the current row data
-            const value = rowData[col] || ""; // Get the value of the current cell
+            const rowData = tableData[row] || [];
 
-            // Check if any cell in the row contains "aw" (case-insensitive) or "+"
             const containsSpecialValue = rowData.some(
-              (cellValue) => /aw/i.test(cellValue) || cellValue === "+"
+              (cellValue) =>
+                (/aw/i.test(cellValue) || cellValue === "+") && cellValue !== "Drawer"
             );
 
             if (containsSpecialValue) {
@@ -828,9 +844,9 @@ const MMToMM = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#ffeb3b"; // Highlight the row with yellow background
-                td.style.fontWeight = "bold"; // Optional: Make the text bold
-                td.textContent = value || ""; // Set the cell content
+                td.style.backgroundColor = "#ffeb3b";
+                td.style.fontWeight = "bold";
+                td.textContent = value || "";
               };
             } else if (row === 0) {
               // Set header row styling
@@ -848,7 +864,7 @@ const MMToMM = () => {
               };
             }
 
-            if (col === 3 && row > 0 && !containsSpecialValue) {
+            if ((col === 3 || col === 4) && row > 0 && !containsSpecialValue) {
               // Custom renderer for column 3, if not part of a highlighted row
               cellProperties.renderer = (
                 instance,
@@ -873,7 +889,7 @@ const MMToMM = () => {
                   n: "Niche Cross",
                   g: "Glass",
                   fi: "Figure",
-                  dr: "Drawer"
+                  ar: "Drawer"
                 };
 
                 if (match) {
@@ -907,41 +923,6 @@ const MMToMM = () => {
             return cellProperties;
           }}
         />
-        {/* <HotTable
-          data={JSON.parse(JSON.stringify(tableData))}
-          colHeaders={true}
-          rowHeaders={true}
-          width="100%"
-          height="800"
-          stretchH="all"
-          licenseKey="non-commercial-and-evaluation"
-          afterChange={handleTableChange}
-          cells={(row, col, prop) => {
-            const cellProperties = {};
-            if (col === 3) {
-              const value = tableData[row] ? tableData[row][col] : "";
-              if (["1", "2", "3", "5"].includes(value)) {
-                cellProperties.renderer = (
-                  instance,
-                  td,
-                  row,
-                  col,
-                  prop,
-                  value,
-                  cellProperties
-                ) => {
-                  td.innerHTML = "";
-                  const img = document.createElement("img");
-                  img.src = arrowMap[value];
-                  img.style.maxWidth = "20px";
-                  img.style.maxHeight = "20px";
-                  td.appendChild(img);
-                };
-              }
-            }
-            return cellProperties;
-          }}
-        /> */}
       </div>
       <Modal isOpen={isModalOpen} toggle={toggleModal}>
         <ModalHeader toggle={toggleModal}>Add Batch Number</ModalHeader>

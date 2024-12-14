@@ -1,10 +1,8 @@
 import React, { useEffect } from "react";
 import { Link } from "react-router-dom";
 import SimpleBar from "simplebar-react";
-//import logo
 import logoSm from "../assets/images/logo-sm.png";
 import logoLight from "../assets/images/logo-light.png";
-//Import Components
 import VerticalLayout from "./VerticalLayouts";
 import { Container } from "reactstrap";
 import HorizontalLayout from "./HorizontalLayout";
@@ -20,7 +18,6 @@ const Sidebar = ({ layoutType }) => {
   });
 
   const addEventListenerOnSmHoverMenu = () => {
-    // add listener Sidebar Hover icon on change layout from setting
     if (
       document.documentElement.getAttribute("data-sidebar-size") === "sm-hover"
     ) {
@@ -44,11 +41,12 @@ const Sidebar = ({ layoutType }) => {
         <div className="navbar-brand-box">
           <Link to="/" className="logo logo-light mt-1">
             <span className="logo-sm">
-              <img src={logoSm} alt="" height="40" />
+              <img src={logoSm} alt="" height="42" />
             </span>
-            <span className="">
+            <span className="logo-lg">
               <img src={logoLight} alt="" height="28" />
             </span>
+
           </Link>
           <button
             onClick={addEventListenerOnSmHoverMenu}
@@ -70,8 +68,6 @@ const Sidebar = ({ layoutType }) => {
           </div>
         ) : layoutType === "twocolumn" ? (
           <React.Fragment>
-            {/* <TwoColumnLayout layoutType={layoutType} />
-            <div className="sidebar-background"></div> */}
           </React.Fragment>
         ) : (
           <React.Fragment>

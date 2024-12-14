@@ -44,8 +44,8 @@ const InchesToMM = () => {
   };
 
   const [tableData, setTableData] = useState([
-    ["WIDTH", "HEIGHT", "PCS", "REMARK", "WIDTH(MM)", "HEIGHT(MM)", "PCS"],
-    ...Array(300).fill(["", "", "", "", "", "", ""]),
+    ["WIDTH", "HEIGHT", "PCS", "REMARK", "REMARK 2", "WIDTH(MM)", "HEIGHT(MM)", "PCS"],
+    ...Array(300).fill(["", "", "", "", "", "", "", ""]),
   ]);
 
   const formatDateToDMY = (date) => {
@@ -59,6 +59,19 @@ const InchesToMM = () => {
   const [date, setDate] = useState(formatDateToDMY(new Date()));
   const [clientName, setClientName] = useState("");
   const [book, setBook] = useState("");
+  const [selectedColor, setSelectedColor] = useState("AW_301");
+  const [isOpen, setIsOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileValue, setProfileValue] = useState("");
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [field1, setField1] = useState(tools.toString());
+  const [field2, setField2] = useState(edge.toString());
+  const [luminate, setLuminate] = useState("");
+  const [isLuminateFieldVisible, setIsLuminateFieldVisible] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
 
   useEffect(() => {
     const fetchBatchNumber = async () => {
@@ -76,14 +89,6 @@ const InchesToMM = () => {
     };
     fetchBatchNumber();
   }, []);
-
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [profileValue, setProfileValue] = useState("");
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [field1, setField1] = useState(tools.toString());
-  const [field2, setField2] = useState(edge.toString());
-  const [luminate, setLuminate] = useState("");
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("userData"));
@@ -120,16 +125,17 @@ const InchesToMM = () => {
     setTableData((prevData) => [...prevData, ...newRows]);
   };
 
-
   const downloadExcel = () => {
     const ws = XLSX.utils.aoa_to_sheet([
       [`Date: ${date}`, `Client: ${clientName}`, `Book: ${book}`],
       [],
       ...tableData,
     ]);
+    const sanitizedClientName = clientName?.toString().toLowerCase() || "client";
+    const fileName = `${sanitizedClientName}_${date}_"Inches".xlsx`;
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    XLSX.writeFile(wb, "table_data.xlsx");
+    XLSX.writeFile(wb, fileName);
   };
 
   const workPDF = async () => {
@@ -145,21 +151,25 @@ const InchesToMM = () => {
 
     const safeTableData = Array.isArray(tableData)
       ? tableData
-      : [["WIDTH", "HEIGHT", "PCS", "REMARK", "WIDTH(MM)", "HEIGHT(MM)", "PCS(FINAL)"]];
+      : [["WIDTH", "HEIGHT", "PCS", "REMARK", "REMARK 2", "WIDTH(MM)", "HEIGHT(MM)", "PCS(FINAL)"]];
 
     const headers = [...safeTableData[0]];
     const remarkIndex = headers.indexOf("REMARK");
+    const remark2Index = headers.indexOf("REMARK 2");
 
-    if (remarkIndex > -1) {
+    if (remarkIndex > -1 && remark2Index > -1) {
       headers.splice(remarkIndex, 1);
-      headers.push("REMARK");
+      headers.splice(remark2Index - 1, 1);
+      headers.push("REMARK", "REMARK 2");
     }
 
     const reorderedData = safeTableData.slice(1).map((row) => {
       const remarkValue = row[remarkIndex];
+      const remark2Value = row[remark2Index];
       const newRow = [...row];
       newRow.splice(remarkIndex, 1);
-      newRow.push(remarkValue);
+      newRow.splice(remark2Index - 1, 1);
+      newRow.push(remarkValue, remark2Value);
       return newRow;
     });
 
@@ -177,10 +187,8 @@ const InchesToMM = () => {
       return indexA - indexB;
     });
 
-    // Remove empty rows
     const filteredData = orderedData.filter((row) => row.some((cell) => cell !== ""));
 
-    // Fetch arrow images as base64
     const arrowImages = {
       1: await fetchImageAsBase64(leftArrow),
       2: await fetchImageAsBase64(downArrow),
@@ -192,7 +200,6 @@ const InchesToMM = () => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
 
-    // Add document metadata
     doc.text(`Date: ${date}`, 10, 10);
     doc.text(`Client: ${clientName}`, 10, 20);
     doc.text(`Book: ${book}`, 10, 30);
@@ -229,10 +236,11 @@ const InchesToMM = () => {
 
         // Get the "REMARK" column index
         const remarkColumnIndex = finalHeaders.indexOf("REMARK");
+        const remark2ColumnIndex = finalHeaders.indexOf("REMARK 2");
 
-        // If the current cell is in the REMARK column
-        if (data.column.index === remarkColumnIndex) {
-          const cellText = data.cell.raw;
+        // If the current cell is in the REMARK or REMARK 2 column
+        if (data.column.index === remarkColumnIndex || data.column.index === remark2ColumnIndex) {
+          const cellText = data.cell.raw; // Use raw data, not formatted text
           const remarkImage = arrowImages[cellText]; // Match the raw cell value with arrow images
 
           if (remarkImage) {
@@ -245,6 +253,7 @@ const InchesToMM = () => {
             const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
             const imageWidth = maxImageSize;
             const imageHeight = maxImageSize;
+
             doc.addImage(
               remarkImage,
               "PNG",
@@ -271,6 +280,7 @@ const InchesToMM = () => {
     doc.save(`${sanitizedClientName}${date}.pdf`);
   };
 
+
   const normalPDF = async () => {
     if (!clientName) {
       dispatch(
@@ -281,6 +291,7 @@ const InchesToMM = () => {
       );
       return;
     }
+
     const safeTableData = Array.isArray(tableData)
       ? tableData
       : [
@@ -289,6 +300,7 @@ const InchesToMM = () => {
           "HEIGHT",
           "PCS",
           "REMARK",
+          "REMARK 2",
           "WIDTH(MM)",
           "HEIGHT(MM)",
           "PCS(FINAL)",
@@ -297,20 +309,29 @@ const InchesToMM = () => {
 
     const headers = [...safeTableData[0]];
     const remarkIndex = headers.indexOf("REMARK");
-    if (remarkIndex > -1) {
-      headers.splice(remarkIndex, 1);
-      headers.push("REMARK");
+    const remark2Index = headers.indexOf("REMARK 2");
+
+    // Reorder the headers: Remove "REMARK" and "REMARK 2" from original positions and move them to the end
+    if (remarkIndex > -1 && remark2Index > -1) {
+      headers.splice(remarkIndex, 1); // Remove "REMARK"
+      headers.splice(remark2Index - 1, 1); // Remove "REMARK 2"
+      headers.push("REMARK", "REMARK 2"); // Add them to the end
     }
 
     const reorderedData = safeTableData.slice(1).map((row) => {
+      const remarkValue = row[remarkIndex];
+      const remark2Value = row[remark2Index];
       const newRow = [...row];
       if (remarkIndex > -1) {
-        const remarkValue = newRow[remarkIndex];
-        newRow.splice(remarkIndex, 1);
-        newRow.push(remarkValue);
+        newRow.splice(remarkIndex, 1); // Remove "REMARK"
       }
+      if (remark2Index > -1) {
+        newRow.splice(remark2Index - 1, 1); // Remove "REMARK 2"
+      }
+      newRow.push(remarkValue, remark2Value); // Add them to the end
       return newRow;
     });
+
     const filteredData = reorderedData.filter((row) => row.some((cell) => cell !== ""));
 
     const arrowImages = {
@@ -375,35 +396,40 @@ const InchesToMM = () => {
       headStyles: { fillColor: [22, 160, 133] },
       didDrawCell: (data) => {
         if (!data || !data.row || !data.cell) return;
-        const cellText = data.cell.text[0];
-        const remarkImage = arrowImages[cellText];
 
-        if (remarkImage && data.column.index === finalHeaders.length - 1) {
-          doc.setFillColor(255, 255, 255);
-          doc.rect(
-            data.cell.x,
-            data.cell.y,
-            data.cell.width,
-            data.cell.height,
-            "F"
-          );
-          const cellWidth = data.cell.width;
-          const cellHeight = data.cell.height;
-          const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
-          const imageWidth = maxImageSize;
-          const imageHeight = maxImageSize;
+        // Handle the REMARK column (last column before REMARK 2)
+        const remarkColumnIndex = finalHeaders.indexOf("REMARK");
+        const remark2ColumnIndex = finalHeaders.indexOf("REMARK 2");
 
-          doc.addImage(
-            remarkImage,
-            "PNG",
-            data.cell.x + (cellWidth - imageWidth) / 2,
-            data.cell.y + (cellHeight - imageHeight) / 2,
-            imageWidth,
-            imageHeight
-          );
+        // If the current cell is in the REMARK or REMARK 2 column
+        if (data.column.index === remarkColumnIndex || data.column.index === remark2ColumnIndex) {
+          const cellText = data.cell.raw; // Use raw data, not formatted text
+          const remarkImage = arrowImages[cellText]; // Match the raw cell value with arrow images
+
+          if (remarkImage) {
+            doc.setFillColor(255, 255, 255); // Clear the cell content
+            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
+
+            // Calculate image dimensions
+            const cellWidth = data.cell.width;
+            const cellHeight = data.cell.height;
+            const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
+            const imageWidth = maxImageSize;
+            const imageHeight = maxImageSize;
+
+            doc.addImage(
+              remarkImage,
+              "PNG",
+              data.cell.x + (cellWidth - imageWidth) / 2,
+              data.cell.y + (cellHeight - imageHeight) / 2,
+              imageWidth,
+              imageHeight
+            );
+          }
         }
       },
     });
+
     const pcsIndex = headers.indexOf("PCS");
     const totalPCS = serialData.reduce((sum, row) => {
       const pcsValue = parseFloat(row[pcsIndex + 1]) || 0;
@@ -416,6 +442,7 @@ const InchesToMM = () => {
     const sanitizedClientName = clientName.toString().toLowerCase();
     doc.save(`${sanitizedClientName}${date}.pdf`);
   };
+
 
   const fetchImageAsBase64 = async (imagePath) => {
     return new Promise((resolve, reject) => {
@@ -454,49 +481,50 @@ const InchesToMM = () => {
           "HEIGHT",
           "PCS",
           "REMARK",
+          "REMARK 2",
           "WIDTH(MM)",
           "HEIGHT(MM)",
-          "PCS",
+          "PCS(FINAL)",
         ],
       ];
 
-    // Reorder headers to move REMARK to the last column
     const headers = [...safeTableData[0]];
     const remarkIndex = headers.indexOf("REMARK");
-    if (remarkIndex > -1) {
-      headers.splice(remarkIndex, 1); // Remove REMARK
-      headers.push("REMARK"); // Add REMARK at the end
+    const remark2Index = headers.indexOf("REMARK 2");
+
+    // Reorder the headers: Remove "REMARK" and "REMARK 2" from original positions and move them to the end
+    if (remarkIndex > -1 && remark2Index > -1) {
+      headers.splice(remarkIndex, 1); // Remove "REMARK"
+      headers.splice(remark2Index - 1, 1); // Remove "REMARK 2"
+      headers.push("REMARK", "REMARK 2"); // Add them to the end
     }
 
-    // Reorder each row to match the new header order
     const reorderedData = safeTableData.slice(1).map((row) => {
+      const remarkValue = row[remarkIndex];
+      const remark2Value = row[remark2Index];
       const newRow = [...row];
       if (remarkIndex > -1) {
-        const remarkValue = newRow[remarkIndex];
-        newRow.splice(remarkIndex, 1); // Remove REMARK
-        newRow.push(remarkValue); // Add REMARK at the end
+        newRow.splice(remarkIndex, 1); // Remove "REMARK"
       }
+      if (remark2Index > -1) {
+        newRow.splice(remark2Index - 1, 1); // Remove "REMARK 2"
+      }
+      newRow.push(remarkValue, remark2Value); // Add them to the end
       return newRow;
     });
 
-    // Filter out rows that have all empty fields
-    const filteredData = reorderedData.filter((row) => row.some(cell => cell.trim() !== ""));
+    const filteredData = reorderedData.filter((row) => row.some((cell) => cell !== ""));
 
-    // Limit to the first 7 rows
-    const limitedData = filteredData.slice(0, 7);
-
-    // Preload arrow images as base64
     const arrowImages = {
-      "1": await fetchImageAsBase64(leftArrow),
-      "2": await fetchImageAsBase64(downArrow),
-      "3": await fetchImageAsBase64(rightArrow),
-      "5": await fetchImageAsBase64(upArrow),
+      1: await fetchImageAsBase64(leftArrow),
+      2: await fetchImageAsBase64(downArrow),
+      3: await fetchImageAsBase64(rightArrow),
+      5: await fetchImageAsBase64(upArrow),
     };
 
     const doc = new jsPDF();
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-
     doc.text(`Date: ${date}`, 10, 10);
     doc.text(`Client: ${clientName}`, 10, 20);
     doc.text(`Book: ${book}`, 10, 30);
@@ -527,6 +555,9 @@ const InchesToMM = () => {
         imageWidth,
         imageHeight
       );
+
+      const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
+      doc.text(colorCodeText, imageXPosition, imageHeight + 5);
     }
 
     let tableStartY = luminate ? 40 : 30;
@@ -535,10 +566,8 @@ const InchesToMM = () => {
       tableStartY = luminate ? 65 : 55;
     }
 
-    const serialData = limitedData.map((row, index) => [index + 1, ...row]);
-
+    const serialData = filteredData.map((row, index) => [index + 1, ...row]);
     const finalHeaders = ["S. No", ...headers];
-
     doc.autoTable({
       head: [finalHeaders],
       body: serialData,
@@ -550,19 +579,18 @@ const InchesToMM = () => {
         if (!data || !data.row || !data.cell) return;
 
         const remarkColumnIndex = finalHeaders.indexOf("REMARK");
-        if (data.column.index === remarkColumnIndex) {
-          const cellText = data.cell.text[0];
-          const remarkImage = arrowImages[cellText];
+        const remark2ColumnIndex = finalHeaders.indexOf("REMARK 2");
+
+        // If the current cell is in the REMARK or REMARK 2 column
+        if (data.column.index === remarkColumnIndex || data.column.index === remark2ColumnIndex) {
+          const cellText = data.cell.raw; // Use raw data, not formatted text
+          const remarkImage = arrowImages[cellText]; // Match the raw cell value with arrow images
 
           if (remarkImage) {
-            doc.setFillColor(255, 255, 255);
-            doc.rect(
-              data.cell.x,
-              data.cell.y,
-              data.cell.width,
-              data.cell.height,
-              "F"
-            );
+            doc.setFillColor(255, 255, 255); // Clear the cell content
+            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
+
+            // Calculate image dimensions
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
             const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
@@ -686,6 +714,7 @@ const InchesToMM = () => {
     });
     input.click();
   };
+
   const handleTableChange = (changes, source) => {
     if (changes && source !== "loadData") {
       setTableData((prevData) => {
@@ -695,7 +724,9 @@ const InchesToMM = () => {
           if (newValue !== oldValue) {
             const isSpecialValue = /aw/i.test(newValue) || newValue === "+";
             setIsSpecial(isSpecialValue);
-            if (col === 3) {
+
+            // Handle Remark and Remark 2 logic
+            if (col === 3 || col === 4) {
               const placeholderMap = {
                 c: "Cross",
                 f: "Fix",
@@ -706,7 +737,7 @@ const InchesToMM = () => {
                 n: "Niche Cross",
                 g: "Glass",
                 fi: "Figure",
-                dr: "Drawer"
+                ar: "Drawer"
               };
               if (typeof newValue === "string") {
                 const match = newValue.match(/^([a-z]+)?\.?(\d+)?$/i);
@@ -737,22 +768,24 @@ const InchesToMM = () => {
             } else {
               newData[row][col] = newValue;
             }
+
+            // Ensure calculations for other columns remain unchanged
             if (!isSpecialValue) {
               if (col === 0) {
-                newData[row][4] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
-              }
-              if (col === 1) {
                 newData[row][5] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
               }
+              if (col === 1) {
+                newData[row][6] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
+              }
               if (col === 2) {
-                newData[row][6] = newValue;
+                newData[row][7] = newValue;
               }
             } else {
               if (col === 0) {
-                newData[row][4] = "";
+                newData[row][5] = "";
               }
               if (col === 1) {
-                newData[row][5] = "";
+                newData[row][6] = "";
               }
             }
           }
@@ -763,7 +796,6 @@ const InchesToMM = () => {
     }
   };
 
-  const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
 
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
@@ -811,8 +843,8 @@ const InchesToMM = () => {
 
     const updatedTableData = tableData.map((row, index) => {
       if (index > 0 && row[3] === "Profile") {
-        const newHeight = (parseFloat(row[5]) || 0) - value;
-        row[5] = newHeight.toFixed(1);
+        const newHeight = (parseFloat(row[6]) || 0) - value;
+        row[6] = newHeight.toFixed(1);
       }
       return row;
     });
@@ -828,8 +860,7 @@ const InchesToMM = () => {
     setDate(`${day}-${month}-${year}`);
   };
 
-  const [selectedColor, setSelectedColor] = useState("AW_301");
-  const [isOpen, setIsOpen] = useState(false);
+
   const importAll = (r) => {
     let images = {};
     r.keys().forEach((item) => {
@@ -845,7 +876,6 @@ const InchesToMM = () => {
     )
   );
 
-  const [isLuminateFieldVisible, setIsLuminateFieldVisible] = useState(false);
 
   const colorOptions = useMemo(() => {
     const options = Object.keys(colorImages)
@@ -868,6 +898,7 @@ const InchesToMM = () => {
       setIsLuminateFieldVisible(false);
       setLuminate("");
     }
+    setIsOpen(false);
   };
 
   useEffect(() => {
@@ -882,7 +913,7 @@ const InchesToMM = () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
-  const dropdownRef = useRef(null);
+
 
   return (
     <React.Fragment>
@@ -922,12 +953,16 @@ const InchesToMM = () => {
           <div style={{ width: "50%" }}> <div className="ms-4 mb-2">
             <Label>Color Code:</Label>
             <div className="dropdown" ref={dropdownRef}>
-              <Input type="text"
-                readOnly value={selectedColor.split(".")[0]}
+              <Input
+                type="text"
+                readOnly
+                value={selectedColor.split(".")[0]}
                 onClick={() => setIsOpen(!isOpen)}
-                className="form-control dropdown-toggle cursor-pointer" />
+                className="form-control dropdown-toggle cursor-pointer"
+              />
               {isOpen && (
-                <div className="dropdown-menu show"
+                <div
+                  className="dropdown-menu show"
                   style={{
                     maxHeight: "40vh",
                     overflow: "auto",
@@ -936,20 +971,31 @@ const InchesToMM = () => {
                     inset: "0px auto auto 0px",
                     margin: "0px",
                     transform: "translate(0px, 38px)",
-                  }} >
-                  {colorOptions.map((option) => (<button key={option.code}
-                    className="dropdown-item"
-                    onClick={() => handleColorSelect(option.code)} >
-                    {option.imageSrc && (<img src={option.imageSrc}
-                      alt={option.code}
-                      style={{
-                        width: "30px",
-                        height: "30px",
-                        marginRight: "10px",
-                        objectFit: "cover",
-                      }} />)}
-                    {option.code.split(".")[0]}
-                  </button>))} </div>)}
+                  }}
+                >
+                  {colorOptions.map((option) => (
+                    <button
+                      key={option.code}
+                      className="dropdown-item"
+                      onClick={() => handleColorSelect(option.code)}
+                    >
+                      {option.imageSrc && (
+                        <img
+                          src={option.imageSrc}
+                          alt={option.code}
+                          style={{
+                            width: "30px",
+                            height: "30px",
+                            marginRight: "10px",
+                            objectFit: "cover",
+                          }}
+                        />
+                      )}
+                      {option.code.split(".")[0]}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
             {selectedColor && (<div className="ms-4">
@@ -1025,7 +1071,6 @@ const InchesToMM = () => {
         >
           Batch Number: {batchNumber}
         </Tooltip>
-
         <HotTable
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}
@@ -1041,7 +1086,8 @@ const InchesToMM = () => {
             const cellProperties = {};
             const rowData = tableData[row] || [];
             const containsSpecialValue = rowData.some(
-              (cellValue) => /aw/i.test(cellValue) || cellValue === "+"
+              (cellValue) =>
+                (/aw/i.test(cellValue) || cellValue === "+") && cellValue !== "Drawer"
             );
 
             if (containsSpecialValue) {
@@ -1072,7 +1118,7 @@ const InchesToMM = () => {
               };
             }
 
-            if (col === 3 && row > 0 && !containsSpecialValue) {
+            if ((col === 3 || col === 4) && row > 0 && !containsSpecialValue) {
               cellProperties.renderer = (
                 instance,
                 td,
@@ -1096,7 +1142,7 @@ const InchesToMM = () => {
                   n: "Niche Cross",
                   g: "Glass",
                   fi: "Figure",
-                  dr: "Drawer"
+                  ar: "Drawer"
                 };
 
                 if (match) {
@@ -1130,6 +1176,7 @@ const InchesToMM = () => {
             return cellProperties;
           }}
         />
+
 
       </div>
 

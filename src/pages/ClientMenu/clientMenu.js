@@ -31,7 +31,7 @@ const ClientMenu = () => {
   };
 
   const [tableData, setTableData] = useState([
-    ["WIDTH", "HEIGHT", "PCS", "REMARK"],
+    ["WIDTH", "HEIGHT", "PCS", "REMARK", "REMARK 2"],
     ...Array(300).fill(["", "", "", ""]),
   ]);
 
@@ -409,7 +409,7 @@ const ClientMenu = () => {
                 convertValue(newValue);
               }
             }
-            if (col === 3) {
+            if (col === 3 || col === 4) {
               if (newValue && ["1", "2", "3", "5"].includes(newValue)) {
                 newData[row][col] = newValue;
               } else if (newValue && newValue.startsWith("fi")) {
@@ -430,7 +430,7 @@ const ClientMenu = () => {
                 newData[row][col] = "Upar Cross";
               } else if (newValue && newValue.startsWith("n")) {
                 newData[row][col] = "Niche Cross";
-              } else if (newValue && newValue.startsWith("dr")) {
+              } else if (newValue && newValue.startsWith("ar")) {
                 newData[row][col] = "Drawer"
               };
             }
@@ -486,6 +486,7 @@ const ClientMenu = () => {
       setIsLuminateFieldVisible(false);
       setLuminate("");
     }
+    setIsOpen(false);
   };
 
   useEffect(() => {
@@ -643,7 +644,8 @@ const ClientMenu = () => {
             const cellProperties = {};
             const rowData = tableData[row] || [];
             const containsSpecialValue = rowData.some(
-              (cellValue) => /aw/i.test(cellValue) || cellValue === "+"
+              (cellValue) =>
+                (/aw/i.test(cellValue) || cellValue === "+") && cellValue !== "Drawer"
             );
 
             if (containsSpecialValue) {
@@ -674,7 +676,7 @@ const ClientMenu = () => {
               };
             }
 
-            if (col === 3 && row > 0 && !containsSpecialValue) {
+            if ((col === 3 || col === 4) && row > 0 && !containsSpecialValue) {
               cellProperties.renderer = (
                 instance,
                 td,
@@ -698,7 +700,7 @@ const ClientMenu = () => {
                   n: "Niche Cross",
                   g: "Glass",
                   fi: "Figure",
-                  dr: "Drawer"
+                  ar: "Drawer",
                 };
 
                 if (match) {
@@ -732,6 +734,8 @@ const ClientMenu = () => {
             return cellProperties;
           }}
         />
+
+
       </div>
     </React.Fragment>
   );
