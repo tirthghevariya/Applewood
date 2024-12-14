@@ -232,7 +232,7 @@ const InchesToMM = () => {
 
         // If the current cell is in the REMARK column
         if (data.column.index === remarkColumnIndex) {
-          const cellText = data.cell.raw; // Use raw data, not formatted text
+          const cellText = data.cell.raw;
           const remarkImage = arrowImages[cellText]; // Match the raw cell value with arrow images
 
           if (remarkImage) {
