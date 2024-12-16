@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HotTable } from "@handsontable/react";
 import { registerAllModules } from 'handsontable/registry';
@@ -118,42 +118,163 @@ const ClientMenu = () => {
           msg: "Please enter client name",
         })
       );
-    } else {
-      const safeTableData = Array.isArray(tableData)
-        ? tableData
-        : [
-          [
-            "WIDTH",
-            "HEIGHT",
-            "PCS",
-            "REMARK",
-            "WIDTH(MM)",
-            "HEIGHT(MM)",
-            "PCS",
-          ],
-        ];
-
-      const doc = new jsPDF();
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-
-      doc.text(`Date: ${date}`, 10, 10);
-      doc.text(`Client: ${clientName}`, 10, 20);
-      doc.text(`Book: ${book}`, 10, 30);
-
-      doc.text(`Unit: ${selectedUnit}`, 10, 40); // Add selected unit to PDF
-
-      if (luminate) {
-        doc.text(`Luminate No: ${luminate}`, 10, 50);
-      }
-
-      const sanitizedClientName = clientName.toString().toLowerCase();
-      const sanitizedUnit = selectedUnit.toLowerCase();
-
-      doc.save(`${sanitizedClientName}_${date}_${sanitizedUnit}.pdf`);
+      return;
     }
-  };
 
+    const safeTableData = Array.isArray(tableData)
+      ? tableData
+      : [
+        [
+          "WIDTH",
+          "HEIGHT",
+          "PCS",
+          "REMARK",
+          "REMARK 2",
+          "WIDTH(MM)",
+          "HEIGHT(MM)",
+          "PCS",
+        ],
+      ];
+
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+
+    let currentY = 10; // Start Y position for the content
+    const lineSpacing = 10; // Space between each line of text
+
+    // Add text fields with proper spacing
+    doc.text(`Date: ${date}`, 10, currentY);
+    currentY += lineSpacing;
+
+    doc.text(`Client: ${clientName}`, 10, currentY);
+    currentY += lineSpacing;
+
+    doc.text(`Book: ${book}`, 10, currentY);
+    currentY += lineSpacing;
+
+    doc.text(`Unit: ${selectedUnit}`, 10, currentY);
+    currentY += lineSpacing;
+
+    if (luminate) {
+      doc.text(`Luminate No: ${luminate}`, 10, currentY);
+      currentY += lineSpacing;
+    }
+
+    // Handle color image (optional)
+    const selectedColorImage =
+      colorImages[selectedColor.replace(" ", "_")] || null;
+    let colorImageBase64 = null;
+
+    if (selectedColorImage) {
+      colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
+    }
+
+    if (colorImageBase64) {
+      const imageWidth = 40;
+      const imageHeight = 50;
+      const imageXPosition = 155;
+      const imageYPosition = 5;
+
+      doc.addImage(
+        colorImageBase64,
+        "PNG",
+        imageXPosition,
+        imageYPosition,
+        imageWidth,
+        imageHeight
+      );
+      currentY += imageHeight - 40;
+    }
+    const tableStartY = currentY;
+
+    const filteredData = safeTableData
+      .slice(1)
+      .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
+
+    const pcsIndex = safeTableData[0].indexOf("PCS");
+
+    const totalPCS = filteredData.reduce((sum, row) => {
+      const pcsValue = parseFloat(row[pcsIndex]) || 0;
+      return sum + pcsValue;
+    }, 0);
+
+    const arrowImages = {
+      1: await fetchImageAsBase64(leftArrow),
+      2: await fetchImageAsBase64(downArrow),
+      3: await fetchImageAsBase64(rightArrow),
+      5: await fetchImageAsBase64(upArrow),
+    };
+
+    // Process table data
+    const processedData = filteredData.map((row) => {
+      return row.map((cell) => {
+        if (["1", "2", "3", "5"].includes(cell)) {
+          return cell;
+        }
+        return cell;
+      });
+    });
+
+    const serialData = processedData.map((row, index) => [index + 1, ...row]);
+    const headers = ["S. No", ...safeTableData[0]];
+
+    // Render table with padding
+    doc.autoTable({
+      head: [headers],
+      body: serialData,
+      startY: tableStartY,
+      styles: { fontSize: 10 },
+      theme: "grid",
+      headStyles: { fillColor: [22, 160, 133] },
+      margin: { top: 10 },
+      didDrawCell: (data) => {
+        if (!data || !data.row || !data.cell) return;
+
+        const cellText = data.cell.text[0];
+        const arrowImagePath = arrowImages[cellText];
+
+        // Add image to "Remark" column (index 4) or "Remark 2" column (index 5)
+        if (arrowImagePath && (data.column.index === 4 || data.column.index === 5)) {
+          doc.setFillColor(255, 255, 255); // White background for cell
+          doc.rect(
+            data.cell.x,
+            data.cell.y,
+            data.cell.width,
+            data.cell.height,
+            "F"
+          );
+
+          const cellWidth = data.cell.width;
+          const cellHeight = data.cell.height;
+          const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
+          const imageWidth = maxImageSize;
+          const imageHeight = maxImageSize;
+
+          doc.addImage(
+            arrowImagePath,
+            "PNG",
+            data.cell.x + (cellWidth - imageWidth) / 2,
+            data.cell.y + (cellHeight - imageHeight) / 2,
+            imageWidth,
+            imageHeight
+          );
+        }
+      },
+    });
+
+    // Add Total PCS text below the table
+    const finalY = doc.lastAutoTable.finalY + 10;
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
+
+    // Sanitize client name and unit for file name
+    const sanitizedClientName = clientName.toString().toLowerCase();
+    const sanitizedUnit = selectedUnit.toLowerCase();
+
+    // Save the PDF
+    doc.save(`${sanitizedClientName}_${date}_${sanitizedUnit}.pdf`);
+  };
 
   const printPDF = async () => {
     if (!clientName) {
@@ -163,153 +284,155 @@ const ClientMenu = () => {
           msg: "Please enter client name",
         })
       );
-    } else {
-      const safeTableData = Array.isArray(tableData)
-        ? tableData
-        : [
-          [
-            "WIDTH",
-            "HEIGHT",
-            "PCS",
-            "REMARK",
-            "WIDTH(MM)",
-            "HEIGHT(MM)",
-            "PCS",
-          ],
-        ];
-
-      const doc = new jsPDF();
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-
-      doc.text(`Date: ${date}`, 10, 10);
-      doc.text(`Client: ${clientName}`, 10, 20);
-      doc.text(`Book: ${book}`, 10, 30);
-
-      if (luminate) {
-        doc.text(`Luminate No: ${luminate}`, 10, 40);
-      }
-
-      const selectedColorImage =
-        colorImages[selectedColor.replace(" ", "_")] || null;
-      let colorImageBase64 = null;
-      if (selectedColorImage) {
-        colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
-      }
-
-      let imageYPosition = 0;
-
-      if (colorImageBase64) {
-        const imageWidth = 40;
-        const imageHeight = 50;
-        const imageXPosition = 130;
-
-        doc.addImage(
-          colorImageBase64,
-          "PNG",
-          imageXPosition,
-          0,
-          imageWidth,
-          imageHeight
-        );
-      }
-
-      let tableStartY = luminate ? 40 : 30;
-      if (colorImageBase64) {
-        doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
-        tableStartY = luminate ? 65 : 55;
-      }
-
-      const filteredData = safeTableData
-        .slice(1)
-        .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
-
-      const pcsIndex = safeTableData[0].indexOf("PCS");
-
-      const totalPCS = filteredData.reduce((sum, row) => {
-        const pcsValue = parseFloat(row[pcsIndex]) || 0;
-        return sum + pcsValue;
-      }, 0);
-
-      const arrowImages = {
-        1: await fetchImageAsBase64(leftArrow),
-        2: await fetchImageAsBase64(downArrow),
-        3: await fetchImageAsBase64(rightArrow),
-        5: await fetchImageAsBase64(upArrow),
-      };
-
-      const processedData = filteredData.map((row) => {
-        return row.map((cell) => {
-          if (["1", "2", "3", "5"].includes(cell)) {
-            return cell;
-          }
-          return cell;
-        });
-      });
-      const serialData = processedData.map((row, index) => [index + 1, ...row]);
-
-      const headers = ["S. No", ...safeTableData[0]];
-
-      doc.autoTable({
-        head: [headers],
-        body: serialData,
-        startY: tableStartY,
-        styles: { fontSize: 10 },
-        theme: "grid",
-        headStyles: { fillColor: [22, 160, 133] },
-        margin: { top: tableStartY },
-        didDrawCell: (data) => {
-          if (!data || !data.row || !data.cell) return;
-
-          // Check if this cell needs an image
-          const cellText = data.cell.text[0];
-          const arrowImagePath = arrowImages[cellText]; // Get image for the text
-
-          if (arrowImagePath && data.column.index === 4) { // Assuming "REMARK" is at index 4
-            // Clear the cell background
-            doc.setFillColor(255, 255, 255); // White background
-            doc.rect(
-              data.cell.x,
-              data.cell.y,
-              data.cell.width,
-              data.cell.height,
-              "F" // Fill style
-            );
-
-            // Calculate cell dimensions
-            const cellWidth = data.cell.width;
-            const cellHeight = data.cell.height;
-
-            // Calculate image dimensions while keeping aspect ratio
-            const imageMaxSize = Math.min(cellWidth, cellHeight) - 4; // 4px padding
-            const imageWidth = imageMaxSize;
-            const imageHeight = imageMaxSize;
-
-            // Center the image within the cell
-            const imageX = data.cell.x + (cellWidth - imageWidth) / 2;
-            const imageY = data.cell.y + (cellHeight - imageHeight) / 2;
-
-            // Add the image
-            doc.addImage(
-              arrowImagePath,
-              "PNG",
-              imageX,
-              imageY,
-              imageWidth,
-              imageHeight
-            );
-          }
-        },
-
-
-      });
-
-      const finalY = doc.lastAutoTable.finalY + 10;
-      doc.setFont("helvetica", "bold");
-      doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
-      window.open(doc.output("bloburl"));
+      return;
     }
+
+    const safeTableData = Array.isArray(tableData)
+      ? tableData
+      : [
+        [
+          "WIDTH",
+          "HEIGHT",
+          "PCS",
+          "REMARK",
+          "WIDTH(MM)",
+          "HEIGHT(MM)",
+          "PCS",
+        ],
+      ];
+
+    const doc = new jsPDF();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+
+    let currentY = 10;
+    const lineSpacing = 10;
+
+    doc.text(`Date: ${date}`, 10, currentY);
+    currentY += lineSpacing;
+
+    doc.text(`Client: ${clientName}`, 10, currentY);
+    currentY += lineSpacing;
+
+    doc.text(`Book: ${book}`, 10, currentY);
+    currentY += lineSpacing;
+
+    if (luminate) {
+      doc.text(`Luminate No: ${luminate}`, 10, currentY);
+      currentY += lineSpacing;
+    }
+
+    // Handle color image (optional)
+    const selectedColorImage = colorImages[selectedColor.replace(" ", "_")] || null;
+    let colorImageBase64 = null;
+
+    if (selectedColorImage) {
+      colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
+    }
+
+    if (colorImageBase64) {
+      const imageWidth = 40;
+      const imageHeight = 50;
+      const imageXPosition = 155;
+      const imageYPosition = 5;
+
+      doc.addImage(
+        colorImageBase64,
+        "PNG",
+        imageXPosition,
+        imageYPosition,
+        imageWidth,
+        imageHeight
+      );
+      currentY += imageHeight - 30;
+    }
+
+    const tableStartY = currentY;
+
+    const filteredData = safeTableData
+      .slice(1)
+      .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
+
+    const pcsIndex = safeTableData[0].indexOf("PCS");
+
+    const totalPCS = filteredData.reduce((sum, row) => {
+      const pcsValue = parseFloat(row[pcsIndex]) || 0;
+      return sum + pcsValue;
+    }, 0);
+
+    // Fetch arrow images as Base64
+    const arrowImages = {
+      1: await fetchImageAsBase64(leftArrow),
+      2: await fetchImageAsBase64(downArrow),
+      3: await fetchImageAsBase64(rightArrow),
+      5: await fetchImageAsBase64(upArrow),
+    };
+
+    // Process table data
+    const processedData = filteredData.map((row) => {
+      return row.map((cell) => {
+        if (["1", "2", "3", "5"].includes(cell)) {
+          return cell;
+        }
+        return cell;
+      });
+    });
+
+    const serialData = processedData.map((row, index) => [index + 1, ...row]);
+    const headers = ["S. No", ...safeTableData[0]];
+
+    // Render table with padding
+    doc.autoTable({
+      head: [headers],
+      body: serialData,
+      startY: tableStartY,
+      styles: { fontSize: 10 },
+      theme: "grid",
+      headStyles: { fillColor: [22, 160, 133] },
+      margin: { top: 10 },
+      didDrawCell: (data) => {
+        if (!data || !data.row || !data.cell) return;
+
+        const cellText = data.cell.text[0];
+        const arrowImagePath = arrowImages[cellText];
+
+        if (arrowImagePath && data.column.index === 4) { // Assuming "REMARK" is at index 4
+          doc.setFillColor(255, 255, 255); // White background for cell
+          doc.rect(
+            data.cell.x,
+            data.cell.y,
+            data.cell.width,
+            data.cell.height,
+            "F"
+          );
+
+          const cellWidth = data.cell.width;
+          const cellHeight = data.cell.height;
+          const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
+          const imageWidth = maxImageSize;
+          const imageHeight = maxImageSize;
+
+          doc.addImage(
+            arrowImagePath,
+            "PNG",
+            data.cell.x + (cellWidth - imageWidth) / 2,
+            data.cell.y + (cellHeight - imageHeight) / 2,
+            imageWidth,
+            imageHeight
+          );
+        }
+      },
+    });
+
+    // Add Total PCS text below the table
+    const finalY = doc.lastAutoTable.finalY + 10;
+    doc.setFont("helvetica", "bold");
+    doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
+
+    // Open PDF in a new tab
+    window.open(doc.output("bloburl"));
   };
+
 
   const importFile = () => {
     const input = document.createElement("input");
@@ -344,7 +467,6 @@ const ClientMenu = () => {
 
           setTableData(updatedData);
 
-          // Trigger handleTableChange for imported rows
           rows.forEach((rowData, rowIndex) => {
             const row = rowIndex + 1; // Adjust for headers
             rowData.forEach((cellValue, colIndex) => {
@@ -361,81 +483,60 @@ const ClientMenu = () => {
     input.click();
   };
 
-
-  const convertValue = (value) => {
-    if (typeof value === "string") {
-      const parts = value.split(".");
-      if (parts.length === 2 && parts[1].length === 1) {
-        const wholeNumber = parseFloat(parts[0]) || 0;
-        const fractionalNumber = parseFloat(parts[1]) || 0;
-        const wholeCalc = wholeNumber * 25.4;
-        const fractionalCalc = fractionalNumber * 3.17;
-        return (wholeCalc + fractionalCalc).toFixed(1);
-      } else if (parts.length > 2) {
-        const wholeNumber = parseFloat(parts[0]) || 0;
-        const fractionalNumber = parseFloat(parts.slice(1).join(".")) || 0;
-        const fractionalCalc = fractionalNumber * 3.17;
-        return (wholeNumber * 25.4 + fractionalCalc).toFixed(1);
-      } else if (parts.length === 2) {
-        const wholeNumber = parseFloat(parts[0]) || 0;
-        const fractionalNumber = parseFloat(`0.${parts[1]}`) || 0;
-        const wholeCalc = wholeNumber * 25.4;
-        const fractionalCalc = fractionalNumber * 3.17;
-        return (wholeCalc + fractionalCalc).toFixed(1);
-      }
-    }
-
-    if (!isNaN(value)) {
-      return (value * 25.4).toFixed(2);
-    }
-  };
-
   const handleTableChange = (changes, source) => {
     if (changes && source !== "loadData") {
       setTableData((prevData) => {
         const newData = JSON.parse(JSON.stringify(prevData));
+
         changes.forEach(([row, col, oldValue, newValue]) => {
           if (newValue !== oldValue) {
-            newData[row][col] = newValue;
-            if (col === 0) {
-              if (!newValue || newValue.trim() === "") {
-              } else {
-                convertValue(newValue);
-              }
-            }
-            if (col === 1) {
-              if (!newValue || newValue.trim() === "") {
-              } else {
-                convertValue(newValue);
-              }
-            }
+            const isSpecialValue = /aw/i.test(newValue) || newValue === "+";
+
+            // Handle Remark and Remark 2 logic
             if (col === 3 || col === 4) {
-              if (newValue && ["1", "2", "3", "5"].includes(newValue)) {
-                newData[row][col] = newValue;
-              } else if (newValue && newValue.startsWith("fi")) {
-                newData[row][col] = "Figure";
-              } else if (newValue && newValue.startsWith("f")) {
-                newData[row][col] = "Fix";
-              } else if (newValue && newValue.startsWith("g")) {
-                newData[row][col] = "Glass";
-              } else if (newValue && newValue.startsWith("p")) {
-                newData[row][col] = "Profile";
-              } else if (newValue && newValue.startsWith("j")) {
-                newData[row][col] = "J Cross";
-              } else if (newValue && newValue.startsWith("d")) {
-                newData[row][col] = "D Cross";
-              } else if (newValue && newValue.startsWith("c")) {
-                newData[row][col] = "Cross";
-              } else if (newValue && newValue.startsWith("u")) {
-                newData[row][col] = "Upar Cross";
-              } else if (newValue && newValue.startsWith("n")) {
-                newData[row][col] = "Niche Cross";
-              } else if (newValue && newValue.startsWith("ar")) {
-                newData[row][col] = "Drawer"
+              const placeholderMap = {
+                c: "Cross",
+                f: "Fix",
+                p: "Profile",
+                j: "J Cross",
+                d: "D Cross",
+                u: "Upar Cross",
+                n: "Niche Cross",
+                g: "Glass",
+                fi: "Figure",
+                ar: "Drawer"
               };
+              if (typeof newValue === "string") {
+                const match = newValue.match(/^([a-z]+)?\.?(\d+)?$/i);
+                let text = "";
+                let number = "";
+
+                if (match) {
+                  const key = match[1]?.toLowerCase();
+                  const num = match[2];
+
+                  if (key && placeholderMap[key]) {
+                    text = placeholderMap[key];
+                  }
+
+                  if (num && ["1", "2", "3", "5"].includes(num)) {
+                    number = num;
+                  }
+                }
+                if (text || number) {
+                  newData[row][col] = text && number ? `${text} ${number}` : text || number;
+                } else {
+                  newData[row][col] = newValue;
+                }
+              } else {
+                newData[row][col] = newValue;
+              }
+            } else {
+              newData[row][col] = newValue;
             }
           }
         });
+
         return newData;
       });
     }
@@ -489,19 +590,17 @@ const ClientMenu = () => {
     setIsOpen(false);
   };
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
+  const [totalPCS, setTotalPCS] = useState(0);
+  const calculateTotalPCS = () => {
+    const total = tableData
+      .slice(1)
+      .reduce((sum, row) => sum + (parseInt(row[2], 10) || 0), 0);
+    setTotalPCS(total);
+  };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-  const dropdownRef = useRef(null);
+  useEffect(() => {
+    calculateTotalPCS();
+  }, [tableData]);
 
   return (
     <React.Fragment>
@@ -553,7 +652,7 @@ const ClientMenu = () => {
           </div>
           <div style={{ width: "50%" }}> <div className="ms-4 mb-2">
             <Label>Color Code:</Label>
-            <div className="dropdown" ref={dropdownRef}>
+            <div className="dropdown">
               <Input type="text"
                 readOnly value={selectedColor.split(".")[0]}
                 onClick={() => setIsOpen(!isOpen)}
@@ -629,23 +728,27 @@ const ClientMenu = () => {
         >
           Import
         </Button>
+        <div className="total-pcs mt-3">
+          <h5>Total PCS: {totalPCS}</h5>
+        </div>
         <HotTable
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}
           rowHeaders={(index) => {
             return index === 0 ? "SR No" : `${index}`;
           }}
-          width="auto"
+          autoWrapRow={true}
+          autoWrapCol={true}
           height="auto"
           stretchH="all"
           licenseKey="non-commercial-and-evaluation"
           afterChange={handleTableChange}
-          cells={(row, col, prop) => {
+          cells={(row, col) => {
             const cellProperties = {};
             const rowData = tableData[row] || [];
+
             const containsSpecialValue = rowData.some(
-              (cellValue) =>
-                (/aw/i.test(cellValue) || cellValue === "+") && cellValue !== "Drawer"
+              (cellValue) => /aw/i.test(cellValue) && cellValue !== "Drawer"
             );
 
             if (containsSpecialValue) {
@@ -657,11 +760,12 @@ const ClientMenu = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#ffeb3b";
+                td.style.backgroundColor = "#ffeb3b"; // Highlight yellow
                 td.style.fontWeight = "bold";
                 td.textContent = value || "";
               };
             } else if (row === 0) {
+              // Apply green background for the first row
               cellProperties.renderer = (
                 instance,
                 td,
@@ -670,13 +774,14 @@ const ClientMenu = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#059862";
+                td.style.backgroundColor = "#059862"; // Green background
                 td.style.fontWeight = "bold";
                 td.textContent = value;
               };
             }
 
-            if ((col === 3 || col === 4) && row > 0 && !containsSpecialValue) {
+            // Additional logic for Remark (col 3) and Remark 2 (col 4)
+            if ((col === 3 || col === 4) && row > 0) {
               cellProperties.renderer = (
                 instance,
                 td,
@@ -685,10 +790,10 @@ const ClientMenu = () => {
                 prop,
                 value
               ) => {
-                td.innerHTML = "";
-                const match = value?.match(/^([a-z]+)?\.?(\d+)?$/i);
+                td.innerHTML = ""; // Clear any existing content
                 let text = "";
                 let imageNumber = "";
+                const hasPlus = value?.includes("+"); // Check if "+" exists
 
                 const placeholderMap = {
                   c: "Cross",
@@ -703,29 +808,50 @@ const ClientMenu = () => {
                   ar: "Drawer",
                 };
 
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i); // Match key, number, and optional "+"
+
+                // Handle matching and placeholder conversion
                 if (match) {
-                  const key = match[1]?.toLowerCase();
-                  const number = match[2];
+                  const key = match[1]?.toLowerCase(); // Extract key
+                  const number = match[2]; // Extract number
+
+                  // Map placeholder text using key
                   if (key && placeholderMap[key]) {
                     text = placeholderMap[key];
                   }
+
+                  // Check for a valid image number
                   if (number && ["1", "2", "3", "5"].includes(number)) {
                     imageNumber = number;
                   }
                 }
-                if (text) {
-                  td.textContent = text;
+
+                // Apply yellow background if "+" exists
+                if (hasPlus || containsSpecialValue) {
+                  td.style.backgroundColor = "#ffeb3b"; // Yellow background
+                  td.style.fontWeight = "bold"; // Bold text
                 }
 
+                // If a valid image number is present, show the image
                 if (imageNumber) {
-                  const img = document.createElement("img");
-                  img.src = arrowMap[imageNumber];
-                  img.style.maxWidth = "20px";
-                  img.style.maxHeight = "20px";
-                  img.style.marginLeft = "8px";
-                  td.appendChild(img);
+                  const imgSrc = arrowMap[imageNumber]; // Use your map for image sources
+                  if (imgSrc) {
+                    const img = document.createElement("img");
+                    img.src = imgSrc;
+                    img.style.maxWidth = "20px";
+                    img.style.maxHeight = "20px";
+                    img.style.marginLeft = "8px";
+                    td.appendChild(img); // Append the image to the cell
+                  }
+                  // Hide text when an image is displayed
+                  text = "";
                 }
-                if (!text && !imageNumber) {
+
+                // If no image, show placeholder text (e.g., "Fix", "Glass")
+                if (text) {
+                  td.textContent = text;
+                } else if (!imageNumber) {
+                  // If no match, show raw value
                   td.textContent = value || "";
                 }
               };

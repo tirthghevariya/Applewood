@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { HotTable } from "@handsontable/react";
 import "handsontable/dist/handsontable.full.min.css";
@@ -25,6 +25,7 @@ import leftArrow from "../../assets/images/left.png";
 import upArrow from "../../assets/images/up.png";
 import rightArrow from "../../assets/images/right.png";
 import downArrow from "../../assets/images/down.png";
+import { FixedSizeList as List } from 'react-window';
 
 const InchesToMM = () => {
   const navigate = useNavigate();
@@ -36,6 +37,7 @@ const InchesToMM = () => {
 
   const [tooltipOpen, setTooltipOpen] = useState(false);
   registerAllModules();
+
   const arrowMap = {
     1: leftArrow,
     2: downArrow,
@@ -61,7 +63,7 @@ const InchesToMM = () => {
   const [book, setBook] = useState("");
   const [selectedColor, setSelectedColor] = useState("AW_301");
   const [isOpen, setIsOpen] = useState(false);
-  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false)
   const [profileValue, setProfileValue] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -69,7 +71,6 @@ const InchesToMM = () => {
   const [field2, setField2] = useState(edge.toString());
   const [luminate, setLuminate] = useState("");
   const [isLuminateFieldVisible, setIsLuminateFieldVisible] = useState(false);
-  const dropdownRef = useRef(null);
 
   const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
 
@@ -87,27 +88,28 @@ const InchesToMM = () => {
         console.error("Error fetching batch number:", error);
       }
     };
-    fetchBatchNumber();
-  }, []);
 
-  useEffect(() => {
+    // Fetch batch number
+    fetchBatchNumber();
+
     const userData = JSON.parse(localStorage.getItem("userData"));
     if (!userData || !userData.username) {
       navigate("/login");
+      return;
     }
-  }, [navigate]);
 
-  useEffect(() => {
+    // Check for super admin user and redirect if applicable
     const superAdminUser = JSON.parse(localStorage.getItem("superAdminUser"));
     if (superAdminUser && superAdminUser?.userType === "main_admin") {
       navigate("/entries");
+      return; // Prevents setting fields if navigating away
     }
-  }, [navigate]);
 
-  useEffect(() => {
+    // Set fields based on tools and edge values
     setField1(tools.toString());
     setField2(edge.toString());
-  }, [tools, edge]);
+  }, [navigate, tools, edge]);
+
 
   const addColumn = () => {
     const newTableData = tableData.map((row, index) => {
@@ -187,7 +189,8 @@ const InchesToMM = () => {
       return indexA - indexB;
     });
 
-    const filteredData = orderedData.filter((row) => row.some((cell) => cell !== ""));
+    const filteredData = orderedData
+      .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
 
     const arrowImages = {
       1: await fetchImageAsBase64(leftArrow),
@@ -215,10 +218,9 @@ const InchesToMM = () => {
       colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
     }
 
-    let tableStartY = luminate ? 40 : 30;
+    let tableStartY = 50;
     if (colorImageBase64) {
       doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
-      tableStartY = luminate ? 65 : 55;
     }
 
     const serialData = filteredData.map((row, index) => [index + 1, ...row]);
@@ -280,7 +282,6 @@ const InchesToMM = () => {
     doc.save(`${sanitizedClientName}${date}.pdf`);
   };
 
-
   const normalPDF = async () => {
     if (!clientName) {
       dispatch(
@@ -311,11 +312,10 @@ const InchesToMM = () => {
     const remarkIndex = headers.indexOf("REMARK");
     const remark2Index = headers.indexOf("REMARK 2");
 
-    // Reorder the headers: Remove "REMARK" and "REMARK 2" from original positions and move them to the end
     if (remarkIndex > -1 && remark2Index > -1) {
-      headers.splice(remarkIndex, 1); // Remove "REMARK"
-      headers.splice(remark2Index - 1, 1); // Remove "REMARK 2"
-      headers.push("REMARK", "REMARK 2"); // Add them to the end
+      headers.splice(remarkIndex, 1);
+      headers.splice(remark2Index - 1, 1);
+      headers.push("REMARK", "REMARK 2");
     }
 
     const reorderedData = safeTableData.slice(1).map((row) => {
@@ -323,16 +323,18 @@ const InchesToMM = () => {
       const remark2Value = row[remark2Index];
       const newRow = [...row];
       if (remarkIndex > -1) {
-        newRow.splice(remarkIndex, 1); // Remove "REMARK"
+        newRow.splice(remarkIndex, 1);
       }
       if (remark2Index > -1) {
-        newRow.splice(remark2Index - 1, 1); // Remove "REMARK 2"
+        newRow.splice(remark2Index - 1, 1);
       }
-      newRow.push(remarkValue, remark2Value); // Add them to the end
+      newRow.push(remarkValue, remark2Value);
       return newRow;
     });
 
-    const filteredData = reorderedData.filter((row) => row.some((cell) => cell !== ""));
+
+    const filteredData = reorderedData
+      .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
 
     const arrowImages = {
       1: await fetchImageAsBase64(leftArrow),
@@ -359,8 +361,6 @@ const InchesToMM = () => {
       colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
     }
 
-    let imageYPosition = 0;
-
     if (colorImageBase64) {
       const imageWidth = 40;
       const imageHeight = 50;
@@ -379,10 +379,9 @@ const InchesToMM = () => {
       doc.text(colorCodeText, imageXPosition, imageHeight + 5);
     }
 
-    let tableStartY = luminate ? 40 : 30;
+    let tableStartY = 50;
     if (colorImageBase64) {
       doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
-      tableStartY = luminate ? 65 : 55;
     }
 
     const serialData = filteredData.map((row, index) => [index + 1, ...row]);
@@ -403,8 +402,8 @@ const InchesToMM = () => {
 
         // If the current cell is in the REMARK or REMARK 2 column
         if (data.column.index === remarkColumnIndex || data.column.index === remark2ColumnIndex) {
-          const cellText = data.cell.raw; // Use raw data, not formatted text
-          const remarkImage = arrowImages[cellText]; // Match the raw cell value with arrow images
+          const cellText = data.cell.raw;
+          const remarkImage = arrowImages[cellText];
 
           if (remarkImage) {
             doc.setFillColor(255, 255, 255); // Clear the cell content
@@ -492,11 +491,10 @@ const InchesToMM = () => {
     const remarkIndex = headers.indexOf("REMARK");
     const remark2Index = headers.indexOf("REMARK 2");
 
-    // Reorder the headers: Remove "REMARK" and "REMARK 2" from original positions and move them to the end
     if (remarkIndex > -1 && remark2Index > -1) {
-      headers.splice(remarkIndex, 1); // Remove "REMARK"
-      headers.splice(remark2Index - 1, 1); // Remove "REMARK 2"
-      headers.push("REMARK", "REMARK 2"); // Add them to the end
+      headers.splice(remarkIndex, 1);
+      headers.splice(remark2Index - 1, 1);
+      headers.push("REMARK", "REMARK 2");
     }
 
     const reorderedData = safeTableData.slice(1).map((row) => {
@@ -504,16 +502,17 @@ const InchesToMM = () => {
       const remark2Value = row[remark2Index];
       const newRow = [...row];
       if (remarkIndex > -1) {
-        newRow.splice(remarkIndex, 1); // Remove "REMARK"
+        newRow.splice(remarkIndex, 1);
       }
       if (remark2Index > -1) {
-        newRow.splice(remark2Index - 1, 1); // Remove "REMARK 2"
+        newRow.splice(remark2Index - 1, 1);
       }
-      newRow.push(remarkValue, remark2Value); // Add them to the end
+      newRow.push(remarkValue, remark2Value);
       return newRow;
     });
 
-    const filteredData = reorderedData.filter((row) => row.some((cell) => cell !== ""));
+    const filteredData = reorderedData
+      .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
 
     const arrowImages = {
       1: await fetchImageAsBase64(leftArrow),
@@ -540,8 +539,6 @@ const InchesToMM = () => {
       colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
     }
 
-    let imageYPosition = 0;
-
     if (colorImageBase64) {
       const imageWidth = 40;
       const imageHeight = 50;
@@ -555,15 +552,11 @@ const InchesToMM = () => {
         imageWidth,
         imageHeight
       );
-
-      const colorCodeText = `Color Code: ${selectedColor.split(".")[0]}`;
-      doc.text(colorCodeText, imageXPosition, imageHeight + 5);
     }
 
-    let tableStartY = luminate ? 40 : 30;
+    let tableStartY = 50;
     if (colorImageBase64) {
       doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
-      tableStartY = luminate ? 65 : 55;
     }
 
     const serialData = filteredData.map((row, index) => [index + 1, ...row]);
@@ -581,7 +574,6 @@ const InchesToMM = () => {
         const remarkColumnIndex = finalHeaders.indexOf("REMARK");
         const remark2ColumnIndex = finalHeaders.indexOf("REMARK 2");
 
-        // If the current cell is in the REMARK or REMARK 2 column
         if (data.column.index === remarkColumnIndex || data.column.index === remark2ColumnIndex) {
           const cellText = data.cell.raw; // Use raw data, not formatted text
           const remarkImage = arrowImages[cellText]; // Match the raw cell value with arrow images
@@ -590,7 +582,6 @@ const InchesToMM = () => {
             doc.setFillColor(255, 255, 255); // Clear the cell content
             doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
 
-            // Calculate image dimensions
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
             const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
@@ -796,7 +787,6 @@ const InchesToMM = () => {
     }
   };
 
-
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
   };
@@ -900,20 +890,18 @@ const InchesToMM = () => {
     }
     setIsOpen(false);
   };
+  const [totalPCS, setTotalPCS] = useState(0);
+
+  const calculateTotalPCS = () => {
+    const total = tableData
+      .slice(1)
+      .reduce((sum, row) => sum + (parseInt(row[2], 10) || 0), 0);
+    setTotalPCS(total);
+  };
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
+    calculateTotalPCS();
+  }, [tableData]);
 
   return (
     <React.Fragment>
@@ -924,6 +912,7 @@ const InchesToMM = () => {
           }}
           className="align-page d-flex justify-content-between"
         >
+
           <div className="mb-3" style={{ width: "50%" }}>
             <Label for="dateInput">Date:</Label>
             <Input
@@ -952,7 +941,7 @@ const InchesToMM = () => {
           </div>
           <div style={{ width: "50%" }}> <div className="ms-4 mb-2">
             <Label>Color Code:</Label>
-            <div className="dropdown" ref={dropdownRef}>
+            <div className="dropdown">
               <Input
                 type="text"
                 readOnly
@@ -1062,7 +1051,9 @@ const InchesToMM = () => {
         >
           Import
         </Button>
-
+        <div className="total-pcs mt-3">
+          <h5>Total PCS: {totalPCS}</h5>
+        </div>
         <Tooltip
           placement="top"
           isOpen={tooltipOpen}
@@ -1077,19 +1068,22 @@ const InchesToMM = () => {
           rowHeaders={(index) => {
             return index === 0 ? "SR No" : `${index}`;
           }}
-          width="auto"
           height="auto"
           stretchH="all"
           licenseKey="non-commercial-and-evaluation"
           afterChange={handleTableChange}
+          autoWrapRow={true}
+          autoWrapCol={true}
           cells={(row, col, prop) => {
             const cellProperties = {};
             const rowData = tableData[row] || [];
+
+            // Check if any cell in the row contains a special value
             const containsSpecialValue = rowData.some(
-              (cellValue) =>
-                (/aw/i.test(cellValue) || cellValue === "+") && cellValue !== "Drawer"
+              (cellValue) => /aw/i.test(cellValue) && cellValue !== "Drawer"
             );
 
+            // Apply highlight for rows with special values
             if (containsSpecialValue) {
               cellProperties.renderer = (
                 instance,
@@ -1099,11 +1093,12 @@ const InchesToMM = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#ffeb3b";
+                td.style.backgroundColor = "#ffeb3b"; // Highlight yellow
                 td.style.fontWeight = "bold";
                 td.textContent = value || "";
               };
             } else if (row === 0) {
+              // Apply green background for the first row
               cellProperties.renderer = (
                 instance,
                 td,
@@ -1112,13 +1107,14 @@ const InchesToMM = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#059862";
+                td.style.backgroundColor = "#059862"; // Green background
                 td.style.fontWeight = "bold";
                 td.textContent = value;
               };
             }
 
-            if ((col === 3 || col === 4) && row > 0 && !containsSpecialValue) {
+            // Additional logic for Remark (col 3) and Remark 2 (col 4)
+            if ((col === 3 || col === 4) && row > 0) {
               cellProperties.renderer = (
                 instance,
                 td,
@@ -1127,10 +1123,10 @@ const InchesToMM = () => {
                 prop,
                 value
               ) => {
-                td.innerHTML = "";
-                const match = value?.match(/^([a-z]+)?\.?(\d+)?$/i);
+                td.innerHTML = ""; // Clear any existing content
                 let text = "";
                 let imageNumber = "";
+                const hasPlus = value?.includes("+"); // Check if "+" exists
 
                 const placeholderMap = {
                   c: "Cross",
@@ -1142,32 +1138,53 @@ const InchesToMM = () => {
                   n: "Niche Cross",
                   g: "Glass",
                   fi: "Figure",
-                  ar: "Drawer"
+                  ar: "Drawer",
                 };
 
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i); // Match key, number, and optional "+"
+
+                // Handle matching and placeholder conversion
                 if (match) {
-                  const key = match[1]?.toLowerCase();
-                  const number = match[2];
+                  const key = match[1]?.toLowerCase(); // Extract key
+                  const number = match[2]; // Extract number
+
+                  // Map placeholder text using key
                   if (key && placeholderMap[key]) {
                     text = placeholderMap[key];
                   }
+
+                  // Check for a valid image number
                   if (number && ["1", "2", "3", "5"].includes(number)) {
                     imageNumber = number;
                   }
                 }
-                if (text) {
-                  td.textContent = text;
+
+                // Apply yellow background if "+" exists
+                if (hasPlus || containsSpecialValue) {
+                  td.style.backgroundColor = "#ffeb3b"; // Yellow background
+                  td.style.fontWeight = "bold"; // Bold text
                 }
 
+                // If a valid image number is present, show the image
                 if (imageNumber) {
-                  const img = document.createElement("img");
-                  img.src = arrowMap[imageNumber];
-                  img.style.maxWidth = "20px";
-                  img.style.maxHeight = "20px";
-                  img.style.marginLeft = "8px";
-                  td.appendChild(img);
+                  const imgSrc = arrowMap[imageNumber]; // Use your map for image sources
+                  if (imgSrc) {
+                    const img = document.createElement("img");
+                    img.src = imgSrc;
+                    img.style.maxWidth = "20px";
+                    img.style.maxHeight = "20px";
+                    img.style.marginLeft = "8px";
+                    td.appendChild(img); // Append the image to the cell
+                  }
+                  // Hide text when an image is displayed
+                  text = "";
                 }
-                if (!text && !imageNumber) {
+
+                // If no image, show placeholder text (e.g., "Fix", "Glass")
+                if (text) {
+                  td.textContent = text;
+                } else if (!imageNumber) {
+                  // If no match, show raw value
                   td.textContent = value || "";
                 }
               };
@@ -1176,8 +1193,6 @@ const InchesToMM = () => {
             return cellProperties;
           }}
         />
-
-
       </div>
 
       <Modal isOpen={isModalOpen} toggle={toggleModal}>

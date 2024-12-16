@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { HotTable } from "@handsontable/react";
 import { registerAllModules } from 'handsontable/registry';
@@ -232,8 +232,6 @@ const MMToMM = () => {
         colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
       }
 
-      let imageYPosition = 0;
-
       if (colorImageBase64) {
         const imageWidth = 40;
         const imageHeight = 50;
@@ -243,16 +241,15 @@ const MMToMM = () => {
           colorImageBase64,
           "PNG",
           imageXPosition,
-          0,
+          5,
           imageWidth,
           imageHeight
         );
       }
 
-      let tableStartY = luminate ? 40 : 30;
+      let tableStartY = 50;
       if (colorImageBase64) {
         doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
-        tableStartY = luminate ? 65 : 55;
       }
 
       const filteredData = safeTableData
@@ -395,10 +392,9 @@ const MMToMM = () => {
         );
       }
 
-      let tableStartY = luminate ? 40 : 30;
+      let tableStartY = 50;
       if (colorImageBase64) {
         doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
-        tableStartY = luminate ? 65 : 55;
       }
 
       const filteredData = safeTableData
@@ -533,51 +529,56 @@ const MMToMM = () => {
     if (changes && source !== "loadData") {
       setTableData((prevData) => {
         const newData = JSON.parse(JSON.stringify(prevData));
+
         changes.forEach(([row, col, oldValue, newValue]) => {
           if (newValue !== oldValue) {
             const isSpecialValue = /aw/i.test(newValue) || newValue === "+";
 
-            newData[row][col] = newValue;
-            if (col === 0) {
-              if (!newValue || newValue.trim() === "") {
-                newData[row][5] = "";
-              } else {
-                newData[row][5] = convertValue(newValue, batchNumber);
-              }
-            }
-            if (col === 1) {
-              if (!newValue || newValue.trim() === "") {
-                newData[row][6] = "";
-              } else {
-                newData[row][6] = convertValue(newValue, batchNumber);
-              }
-            }
+            // Handle Remark and Remark 2 logic
             if (col === 3 || col === 4) {
-              if (newValue && ["1", "2", "3", "5"].includes(newValue)) {
-                newData[row][col] = newValue;
-              } else if (newValue && newValue.startsWith("fi")) {
-                newData[row][col] = "Figure";
-              } else if (newValue && newValue.startsWith("f")) {
-                newData[row][col] = "Fix";
-              } else if (newValue && newValue.startsWith("g")) {
-                newData[row][col] = "Glass";
-              } else if (newValue && newValue.startsWith("p")) {
-                newData[row][col] = "Profile";
-              } else if (newValue && newValue.startsWith("j")) {
-                newData[row][col] = "J Cross";
-              } else if (newValue && newValue.startsWith("d")) {
-                newData[row][col] = "D Cross";
-              } else if (newValue && newValue.startsWith("c")) {
-                newData[row][col] = "Cross";
-              } else if (newValue && newValue.startsWith("u")) {
-                newData[row][col] = "Upar Cross";
-              } else if (newValue && newValue.startsWith("n")) {
-                newData[row][col] = "Niche Cross";
-              } else if (newValue && newValue.startsWith("ar")) {
-                newData[row][col] = "Drawer"
+              const placeholderMap = {
+                c: "Cross",
+                f: "Fix",
+                p: "Profile",
+                j: "J Cross",
+                d: "D Cross",
+                u: "Upar Cross",
+                n: "Niche Cross",
+                g: "Glass",
+                fi: "Figure",
+                ar: "Drawer"
               };
+              if (typeof newValue === "string") {
+                const match = newValue.match(/^([a-z]+)?\.?(\d+)?$/i);
+                let text = "";
+                let number = "";
+
+                if (match) {
+                  const key = match[1]?.toLowerCase();
+                  const num = match[2];
+
+                  if (key && placeholderMap[key]) {
+                    text = placeholderMap[key];
+                  }
+
+                  if (num && ["1", "2", "3", "5"].includes(num)) {
+                    number = num;
+                  }
+                }
+
+                if (text || number) {
+                  newData[row][col] = text && number ? `${text} ${number}` : text || number;
+                } else {
+                  newData[row][col] = newValue;
+                }
+              } else {
+                newData[row][col] = newValue;
+              }
+            } else {
+              newData[row][col] = newValue;
             }
-            newData[row][7] = newData[row][2];
+
+            // Ensure calculations for other columns remain unchanged
             if (!isSpecialValue) {
               if (col === 0) {
                 newData[row][5] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
@@ -598,6 +599,7 @@ const MMToMM = () => {
             }
           }
         });
+
         return newData;
       });
     }
@@ -611,6 +613,7 @@ const MMToMM = () => {
 
   const [selectedColor, setSelectedColor] = useState("AW_301");
   const [isOpen, setIsOpen] = useState(false);
+
   const importAll = (r) => {
     let images = {};
     r.keys().forEach((item) => {
@@ -618,6 +621,7 @@ const MMToMM = () => {
     });
     return images;
   };
+
   const colorImages = importAll(
     require.context(
       "../../assets/images/color_code",
@@ -656,20 +660,18 @@ const MMToMM = () => {
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
   };
+  const [totalPCS, setTotalPCS] = useState(0);
+
+  const calculateTotalPCS = () => {
+    const total = tableData
+      .slice(1)
+      .reduce((sum, row) => sum + (parseInt(row[2], 10) || 0), 0);
+    setTotalPCS(total);
+  };
 
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-  const dropdownRef = useRef(null);
+    calculateTotalPCS();
+  }, [tableData]);
 
   return (
     <React.Fragment>
@@ -708,7 +710,7 @@ const MMToMM = () => {
           </div>
           <div style={{ width: "50%" }}> <div className="ms-4 mb-2">
             <Label>Color Code:</Label>
-            <div className="dropdown" ref={dropdownRef}>
+            <div className="dropdown">
               <Input
                 type="text"
                 readOnly
@@ -815,13 +817,17 @@ const MMToMM = () => {
         >
           Batch Number: {batchNumber}
         </Tooltip>
+        <div className="total-pcs mt-3">
+          <h5>Total PCS: {totalPCS}</h5>
+        </div>
         <HotTable
           data={JSON.parse(JSON.stringify(tableData))}
           colHeaders={true}
           rowHeaders={(index) => {
             return index === 0 ? "SR No" : `${index}`;
           }}
-          width="auto"
+          autoWrapRow={true}
+          autoWrapCol={true}
           height="auto"
           stretchH="all"
           licenseKey="non-commercial-and-evaluation"
@@ -830,11 +836,12 @@ const MMToMM = () => {
             const cellProperties = {};
             const rowData = tableData[row] || [];
 
+            // Check if any cell in the row contains a special value
             const containsSpecialValue = rowData.some(
-              (cellValue) =>
-                (/aw/i.test(cellValue) || cellValue === "+") && cellValue !== "Drawer"
+              (cellValue) => /aw/i.test(cellValue) && cellValue !== "Drawer"
             );
 
+            // Apply highlight for rows with special values
             if (containsSpecialValue) {
               cellProperties.renderer = (
                 instance,
@@ -844,12 +851,12 @@ const MMToMM = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#ffeb3b";
+                td.style.backgroundColor = "#ffeb3b"; // Highlight yellow
                 td.style.fontWeight = "bold";
                 td.textContent = value || "";
               };
             } else if (row === 0) {
-              // Set header row styling
+              // Apply green background for the first row
               cellProperties.renderer = (
                 instance,
                 td,
@@ -858,14 +865,14 @@ const MMToMM = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#059862";
+                td.style.backgroundColor = "#059862"; // Green background
                 td.style.fontWeight = "bold";
                 td.textContent = value;
               };
             }
 
-            if ((col === 3 || col === 4) && row > 0 && !containsSpecialValue) {
-              // Custom renderer for column 3, if not part of a highlighted row
+            // Additional logic for Remark (col 3) and Remark 2 (col 4)
+            if ((col === 3 || col === 4) && row > 0) {
               cellProperties.renderer = (
                 instance,
                 td,
@@ -874,10 +881,10 @@ const MMToMM = () => {
                 prop,
                 value
               ) => {
-                td.innerHTML = "";
-                const match = value?.match(/^([a-z]+)?\.?(\d+)?$/i);
+                td.innerHTML = ""; // Clear any existing content
                 let text = "";
                 let imageNumber = "";
+                const hasPlus = value?.includes("+"); // Check if "+" exists
 
                 const placeholderMap = {
                   c: "Cross",
@@ -889,32 +896,53 @@ const MMToMM = () => {
                   n: "Niche Cross",
                   g: "Glass",
                   fi: "Figure",
-                  ar: "Drawer"
+                  ar: "Drawer",
                 };
 
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i); // Match key, number, and optional "+"
+
+                // Handle matching and placeholder conversion
                 if (match) {
-                  const key = match[1]?.toLowerCase();
-                  const number = match[2];
+                  const key = match[1]?.toLowerCase(); // Extract key
+                  const number = match[2]; // Extract number
+
+                  // Map placeholder text using key
                   if (key && placeholderMap[key]) {
                     text = placeholderMap[key];
                   }
+
+                  // Check for a valid image number
                   if (number && ["1", "2", "3", "5"].includes(number)) {
                     imageNumber = number;
                   }
                 }
-                if (text) {
-                  td.textContent = text;
+
+                // Apply yellow background if "+" exists
+                if (hasPlus || containsSpecialValue) {
+                  td.style.backgroundColor = "#ffeb3b"; // Yellow background
+                  td.style.fontWeight = "bold"; // Bold text
                 }
 
+                // If a valid image number is present, show the image
                 if (imageNumber) {
-                  const img = document.createElement("img");
-                  img.src = arrowMap[imageNumber];
-                  img.style.maxWidth = "20px";
-                  img.style.maxHeight = "20px";
-                  img.style.marginLeft = "8px";
-                  td.appendChild(img);
+                  const imgSrc = arrowMap[imageNumber]; // Use your map for image sources
+                  if (imgSrc) {
+                    const img = document.createElement("img");
+                    img.src = imgSrc;
+                    img.style.maxWidth = "20px";
+                    img.style.maxHeight = "20px";
+                    img.style.marginLeft = "8px";
+                    td.appendChild(img); // Append the image to the cell
+                  }
+                  // Hide text when an image is displayed
+                  text = "";
                 }
-                if (!text && !imageNumber) {
+
+                // If no image, show placeholder text (e.g., "Fix", "Glass")
+                if (text) {
+                  td.textContent = text;
+                } else if (!imageNumber) {
+                  // If no match, show raw value
                   td.textContent = value || "";
                 }
               };
