@@ -47,7 +47,7 @@ const InchesToMM = () => {
 
   const [tableData, setTableData] = useState([
     ["WIDTH", "HEIGHT", "PCS", "REMARK", "REMARK 2", "WIDTH(MM)", "HEIGHT(MM)", "PCS"],
-    ...Array(300).fill(["", "", "", "", "", "", "", ""]),
+    ...Array(10).fill(["", "", "", "", "", "", "", ""]),
   ]);
 
   const formatDateToDMY = (date) => {
@@ -462,6 +462,19 @@ const InchesToMM = () => {
   };
 
   const printPDF = async () => {
+    const remarkMapping = {
+      c: "Cross",
+      f: "Fix",
+      p: "Profile",
+      j: "J Cross",
+      d: "D Cross",
+      u: "Upar Cross",
+      n: "Niche Cross",
+      g: "Glass",
+      fi: "Figure",
+      ar: "Drawer",
+    };
+
     if (!clientName) {
       dispatch(
         showToast({
@@ -501,18 +514,25 @@ const InchesToMM = () => {
       const remarkValue = row[remarkIndex];
       const remark2Value = row[remark2Index];
       const newRow = [...row];
+      const mapRemark = (value) => {
+        if (!value) return "";
+        const key = value.replace("+", "").toLowerCase();
+        return remarkMapping[key] || value;
+      };
+
       if (remarkIndex > -1) {
         newRow.splice(remarkIndex, 1);
       }
       if (remark2Index > -1) {
         newRow.splice(remark2Index - 1, 1);
       }
-      newRow.push(remarkValue, remark2Value);
+      newRow.push(mapRemark(remarkValue), mapRemark(remark2Value));
       return newRow;
     });
 
-    const filteredData = reorderedData
-      .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
+    const filteredData = reorderedData.filter((row) =>
+      row.some((cell) => cell && cell.trim() !== "")
+    );
 
     const arrowImages = {
       1: await fetchImageAsBase64(leftArrow),
@@ -574,14 +594,24 @@ const InchesToMM = () => {
         const remarkColumnIndex = finalHeaders.indexOf("REMARK");
         const remark2ColumnIndex = finalHeaders.indexOf("REMARK 2");
 
-        if (data.column.index === remarkColumnIndex || data.column.index === remark2ColumnIndex) {
-          const cellText = data.cell.raw; // Use raw data, not formatted text
-          const remarkImage = arrowImages[cellText]; // Match the raw cell value with arrow images
+        if (
+          data.column.index === remarkColumnIndex ||
+          data.column.index === remark2ColumnIndex
+        ) {
+          const cellText = data.cell.raw ? String(data.cell.raw) : "";
+          if (!cellText) return;
 
-          if (remarkImage) {
-            doc.setFillColor(255, 255, 255); // Clear the cell content
+          const containsPlus = cellText.includes("+");
+
+          // Highlight the cell if it contains "+"
+          if (containsPlus) {
+            doc.setFillColor(240, 230, 140); // Yellow highlight
             doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
+          }
 
+          const baseKey = cellText.replace("+", "").trim();
+          const arrowImage = arrowImages[baseKey];
+          if (arrowImage) {
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
             const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
@@ -589,7 +619,7 @@ const InchesToMM = () => {
             const imageHeight = maxImageSize;
 
             doc.addImage(
-              remarkImage,
+              arrowImage,
               "PNG",
               data.cell.x + (cellWidth - imageWidth) / 2,
               data.cell.y + (cellHeight - imageHeight) / 2,
@@ -599,6 +629,7 @@ const InchesToMM = () => {
           }
         }
       },
+
     });
 
     const finalY = doc.lastAutoTable.finalY + 10;
@@ -611,7 +642,6 @@ const InchesToMM = () => {
       10,
       finalY
     );
-
     window.open(doc.output("bloburl"));
   };
 
@@ -688,12 +718,14 @@ const InchesToMM = () => {
           const updatedData = [
             ...tableData.slice(0, 1),
             ...rows,
-            ...Array(300 - rows.length).fill(["", "", "", "", "", "", ""]),
+            ...Array(10 - rows.length).fill(["", "", "", "", "", "", ""]),
           ];
 
           setTableData(updatedData);
+
+          // Trigger handleTableChange for imported rows
           rows.forEach((rowData, rowIndex) => {
-            const row = rowIndex + 1;
+            const row = rowIndex + 1; // Adjust for headers
             rowData.forEach((cellValue, colIndex) => {
               handleTableChange([[row, colIndex, tableData[row]?.[colIndex], cellValue]], "import");
             });
@@ -716,7 +748,6 @@ const InchesToMM = () => {
             const isSpecialValue = /aw/i.test(newValue) || newValue === "+";
             setIsSpecial(isSpecialValue);
 
-            // Handle Remark and Remark 2 logic
             if (col === 3 || col === 4) {
               const placeholderMap = {
                 c: "Cross",
@@ -1193,6 +1224,137 @@ const InchesToMM = () => {
             return cellProperties;
           }}
         />
+        {/* <HotTable
+          data={JSON.parse(JSON.stringify(tableData))}
+          colHeaders={true}
+          rowHeaders={(index) => {
+            return index === 0 ? "SR No" : `${index}`;
+          }}
+          height="auto"
+          stretchH="all"
+          licenseKey="non-commercial-and-evaluation"
+          afterChange={handleTableChange}
+          autoWrapRow={true}
+          autoWrapCol={true}
+          cells={(row, col, prop) => {
+            const cellProperties = {};
+            const rowData = tableData[row] || [];
+
+            // Check if any cell in the row contains a special value
+            const containsSpecialValue = rowData.some(
+              (cellValue) => /aw/i.test(cellValue) && cellValue !== "Drawer"
+            );
+
+            // Apply highlight for rows with special values
+            if (containsSpecialValue) {
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.style.backgroundColor = "#ffeb3b"; // Highlight yellow
+                td.style.fontWeight = "bold";
+                td.textContent = value || "";
+              };
+            } else if (row === 0) {
+              // Apply green background for the first row
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.style.backgroundColor = "#059862"; // Green background
+                td.style.fontWeight = "bold";
+                td.textContent = value;
+              };
+            }
+
+            // Additional logic for Remark (col 3) and Remark 2 (col 4)
+            if ((col === 3 || col === 4) && row > 0) {
+              cellProperties.renderer = (
+                instance,
+                td,
+                row,
+                col,
+                prop,
+                value
+              ) => {
+                td.innerHTML = ""; // Clear any existing content
+                let text = "";
+                let imageNumber = "";
+                const hasPlus = value?.includes("+"); // Check if "+" exists
+
+                const placeholderMap = {
+                  c: "Cross",
+                  f: "Fix",
+                  p: "Profile",
+                  j: "J Cross",
+                  d: "D Cross",
+                  u: "Upar Cross",
+                  n: "Niche Cross",
+                  g: "Glass",
+                  fi: "Figure",
+                  ar: "Drawer",
+                };
+
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i); // Match key, number, and optional "+"
+
+                // Handle matching and placeholder conversion
+                if (match) {
+                  const key = match[1]?.toLowerCase(); // Extract key
+                  const number = match[2]; // Extract number
+
+                  // Map placeholder text using key
+                  if (key && placeholderMap[key]) {
+                    text = placeholderMap[key];
+                  }
+
+                  // Check for a valid image number
+                  if (number && ["1", "2", "3", "5"].includes(number)) {
+                    imageNumber = number;
+                  }
+                }
+
+                // Apply yellow background if "+" exists
+                if (hasPlus || containsSpecialValue) {
+                  td.style.backgroundColor = "#ffeb3b"; // Yellow background
+                  td.style.fontWeight = "bold"; // Bold text
+                }
+
+                // If a valid image number is present, show the image
+                if (imageNumber) {
+                  const imgSrc = arrowMap[imageNumber]; // Use your map for image sources
+                  if (imgSrc) {
+                    const img = document.createElement("img");
+                    img.src = imgSrc;
+                    img.style.maxWidth = "20px";
+                    img.style.maxHeight = "20px";
+                    img.style.marginLeft = "8px";
+                    td.appendChild(img); // Append the image to the cell
+                  }
+                  // Hide text when an image is displayed
+                  text = "";
+                }
+
+                // If no image, show placeholder text (e.g., "Fix", "Glass")
+                if (text) {
+                  td.textContent = text;
+                } else if (!imageNumber) {
+                  // If no match, show raw value
+                  td.textContent = value || "";
+                }
+              };
+            }
+
+            return cellProperties;
+          }}
+        /> */}
       </div>
 
       <Modal isOpen={isModalOpen} toggle={toggleModal}>
