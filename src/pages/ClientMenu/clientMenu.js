@@ -80,6 +80,50 @@ const ClientMenu = () => {
     setTableData((prevData) => [...prevData, ...newRows]);
   };
 
+  const removeColumn = () => {
+    if (tableData[0].length <= 5) { // Keep at least the original 8 columns
+      dispatch(
+        showToast({
+          type: "warning",
+          msg: "Cannot remove more columns - minimum columns reached",
+        })
+      );
+      return;
+    }
+
+    setTableData(prevData =>
+      prevData.map(row => row.slice(0, -1)) // Remove last column from each row
+    );
+
+    dispatch(
+      showToast({
+        type: "success",
+        msg: "Last column removed successfully",
+      })
+    );
+  };
+
+  const removeRow = () => {
+    if (tableData.length <= 2) { // Keep at least header row + 1 data row
+      dispatch(
+        showToast({
+          type: "warning",
+          msg: "Cannot remove more rows - minimum rows reached",
+        })
+      );
+      return;
+    }
+
+    setTableData(prevData => prevData.slice(0, -10));
+
+    dispatch(
+      showToast({
+        type: "success",
+        msg: "Last row removed successfully",
+      })
+    );
+  };
+
   const downloadExcel = () => {
     const sanitizedUnit = selectedUnit.toLowerCase();
     const sanitizedClientName = clientName?.toString().toLowerCase() || "client";
@@ -216,8 +260,24 @@ const ClientMenu = () => {
       });
     });
 
-    const serialData = processedData.map((row, index) => [index + 1, ...row]);
-    const headers = ["S. No", ...safeTableData[0]];
+    // Determine non-empty column indices (excluding the header)
+    const nonEmptyColumnIndices = safeTableData[0]
+      .map((_, colIndex) =>
+        filteredData.some((row) => row[colIndex]?.trim() !== "")
+      )
+      .map((hasContent, i) => hasContent ? i : -1)
+      .filter((i) => i !== -1);
+
+    // Filter header
+    const filteredHeaders = nonEmptyColumnIndices.map((i) => safeTableData[0][i]);
+    const headers = ["S. No", ...filteredHeaders];
+
+    // Filter rows
+    const serialData = processedData.map((row, index) => {
+      const filteredRow = nonEmptyColumnIndices.map((i) => row[i]);
+      return [index + 1, ...filteredRow];
+    });
+
 
     // Render table with padding
     doc.autoTable({
@@ -378,8 +438,24 @@ const ClientMenu = () => {
       });
     });
 
-    const serialData = processedData.map((row, index) => [index + 1, ...row]);
-    const headers = ["S. No", ...safeTableData[0]];
+    // Determine non-empty column indices (excluding the header)
+    const nonEmptyColumnIndices = safeTableData[0]
+      .map((_, colIndex) =>
+        filteredData.some((row) => row[colIndex]?.trim() !== "")
+      )
+      .map((hasContent, i) => hasContent ? i : -1)
+      .filter((i) => i !== -1);
+
+    // Filter header
+    const filteredHeaders = nonEmptyColumnIndices.map((i) => safeTableData[0][i]);
+    const headers = ["S. No", ...filteredHeaders];
+
+    // Filter rows
+    const serialData = processedData.map((row, index) => {
+      const filteredRow = nonEmptyColumnIndices.map((i) => row[i]);
+      return [index + 1, ...filteredRow];
+    });
+
 
     // Render table with padding
     doc.autoTable({
@@ -558,13 +634,13 @@ const ClientMenu = () => {
     });
     return images;
   };
-  const colorImages = importAll(
-    require.context(
-      "../../assets/images/color_code",
-      false,
-      /\.(png|jpe?g|svg)$/
-    )
-  );
+  // const colorImages = importAll(
+  //   require.context(
+  //     "../../assets/images/color_code",
+  //     false,
+  //     /\.(png|jpe?g|svg)$/
+  //   )
+  // );
 
   const colorOptions = useMemo(() => {
     const options = Object.keys(colorImages)
@@ -656,7 +732,7 @@ const ClientMenu = () => {
               <Input type="text"
                 readOnly value={selectedColor.split(".")[0]}
                 onClick={() => setIsOpen(!isOpen)}
-                className="form-control dropdown-toggle cursor-pointer" />
+                className="form-control dropdown-toggle cursor-pointer" />``
               {isOpen && (
                 <div className="dropdown-menu show"
                   style={{
@@ -680,7 +756,8 @@ const ClientMenu = () => {
                         objectFit: "cover",
                       }} />)}
                     {option.code.split(".")[0]}
-                  </button>))} </div>)}
+                  </button>))}
+                </div>)}
             </div>
           </div>
             {selectedColor && (<div className="ms-4">
@@ -708,8 +785,14 @@ const ClientMenu = () => {
         <Button className="mb-2 me-2" color="primary" onClick={addColumn}>
           Add Column
         </Button>
+        <Button className="mb-2 me-2" color="danger" onClick={removeColumn}>
+          Remove Column
+        </Button>
         <Button className="mb-2 ml-2 me-2" color="primary" onClick={addRow}>
           Add Row
+        </Button>
+        <Button className="mb-2 me-2" color="danger" onClick={removeRow}>
+          Remove Row
         </Button>
         <Button className="mb-2 me-2" color="success" onClick={downloadExcel}>
           Download Excel

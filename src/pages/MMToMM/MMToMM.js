@@ -158,6 +158,50 @@ const MMToMM = () => {
     setTableData((prevData) => [...prevData, ...newRows]);
   };
 
+  const removeColumn = () => {
+    if (tableData[0].length <= 8) { // Keep at least the original 8 columns
+      dispatch(
+        showToast({
+          type: "warning",
+          msg: "Cannot remove more columns - minimum columns reached",
+        })
+      );
+      return;
+    }
+
+    setTableData(prevData =>
+      prevData.map(row => row.slice(0, -1)) // Remove last column from each row
+    );
+
+    dispatch(
+      showToast({
+        type: "success",
+        msg: "Last column removed successfully",
+      })
+    );
+  };
+
+  const removeRow = () => {
+    if (tableData.length <= 2) { // Keep at least header row + 1 data row
+      dispatch(
+        showToast({
+          type: "warning",
+          msg: "Cannot remove more rows - minimum rows reached",
+        })
+      );
+      return;
+    }
+
+    setTableData(prevData => prevData.slice(0, -10));
+
+    dispatch(
+      showToast({
+        type: "success",
+        msg: "Last row removed successfully",
+      })
+    );
+  };
+
   const downloadExcel = () => {
     const ws = XLSX.utils.aoa_to_sheet([
       [`Date: ${date}`, `Client: ${clientName}`, `Book: ${book}`],
@@ -278,10 +322,67 @@ const MMToMM = () => {
           return cell;
         });
       });
-      const serialData = processedData.map((row, index) => [index + 1, ...row]);
+      // Determine non-empty column indices (excluding the header)
+      const nonEmptyColumnIndices = safeTableData[0]
+        .map((_, colIndex) =>
+          filteredData.some((row) => row[colIndex]?.trim() !== "")
+        )
+        .map((hasContent, i) => hasContent ? i : -1)
+        .filter((i) => i !== -1);
 
-      const headers = ["S. No", ...safeTableData[0]];
+      // Filter header
+      const filteredHeaders = nonEmptyColumnIndices.map((i) => safeTableData[0][i]);
+      const headers = ["S. No", ...filteredHeaders];
 
+      // Filter rows
+      const serialData = processedData.map((row, index) => {
+        const filteredRow = nonEmptyColumnIndices.map((i) => row[i]);
+        return [index + 1, ...filteredRow];
+      });
+
+      const removeColumn = () => {
+        if (tableData[0].length <= 8) { // Keep at least the original 8 columns
+          dispatch(
+            showToast({
+              type: "warning",
+              msg: "Cannot remove more columns - minimum columns reached",
+            })
+          );
+          return;
+        }
+
+        setTableData(prevData =>
+          prevData.map(row => row.slice(0, -1)) // Remove last column from each row
+        );
+
+        dispatch(
+          showToast({
+            type: "success",
+            msg: "Last column removed successfully",
+          })
+        );
+      };
+
+      const removeRow = () => {
+        if (tableData.length <= 2) { // Keep at least header row + 1 data row
+          dispatch(
+            showToast({
+              type: "warning",
+              msg: "Cannot remove more rows - minimum rows reached",
+            })
+          );
+          return;
+        }
+
+        setTableData(prevData => prevData.slice(0, -10));
+
+        dispatch(
+          showToast({
+            type: "success",
+            msg: "Last row removed successfully",
+          })
+        );
+      };
       doc.autoTable({
         head: [headers],
         body: serialData,
@@ -296,32 +397,38 @@ const MMToMM = () => {
           const cellText = data.cell.text[0];
           const arrowImagePath = arrowImages[cellText];
 
+          // Draw arrow image in WIDTH(MM) column
           if (arrowImagePath && data.column.index === 4) {
             doc.setFillColor(255, 255, 255);
-            doc.rect(
-              data.cell.x,
-              data.cell.y,
-              data.cell.width,
-              data.cell.height,
-              "F"
-            );
+            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
 
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
             const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
-            const imageWidth = maxImageSize;
-            const imageHeight = maxImageSize;
 
             doc.addImage(
               arrowImagePath,
               "PNG",
-              data.cell.x + (cellWidth - imageWidth) / 2,
-              data.cell.y + (cellHeight - imageHeight) / 2,
-              imageWidth,
-              imageHeight
+              data.cell.x + (cellWidth - maxImageSize) / 2,
+              data.cell.y + (cellHeight - maxImageSize) / 2,
+              maxImageSize,
+              maxImageSize
             );
           }
-        },
+
+          // ✅ Bold vertical line between PCS and WIDTH(MM)
+          const pcsIndex = headers.indexOf("PCS");
+          if (data.column.index === pcsIndex) {
+            const nextColX = data.cell.x + data.cell.width;
+            const topY = data.cell.y;
+            const bottomY = data.cell.y + data.cell.height;
+
+            doc.setDrawColor(0);         // Black color
+            doc.setLineWidth(0.8);       // Thicker line
+            doc.line(nextColX, topY, nextColX, bottomY);
+          }
+        }
+
       });
 
       const finalY = doc.lastAutoTable.finalY + 10;
@@ -355,7 +462,6 @@ const MMToMM = () => {
             "PCS",
           ],
         ];
-
       const doc = new jsPDF();
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
@@ -374,8 +480,6 @@ const MMToMM = () => {
       if (selectedColorImage) {
         colorImageBase64 = await fetchImageAsBase64(selectedColorImage);
       }
-
-      let imageYPosition = 0;
 
       if (colorImageBase64) {
         const imageWidth = 40;
@@ -423,9 +527,23 @@ const MMToMM = () => {
           return cell;
         });
       });
-      const serialData = processedData.map((row, index) => [index + 1, ...row]);
+      // Determine non-empty column indices (excluding the header)
+      const nonEmptyColumnIndices = safeTableData[0]
+        .map((_, colIndex) =>
+          filteredData.some((row) => row[colIndex]?.trim() !== "")
+        )
+        .map((hasContent, i) => hasContent ? i : -1)
+        .filter((i) => i !== -1);
 
-      const headers = ["S. No", ...safeTableData[0]];
+      // Filter header
+      const filteredHeaders = nonEmptyColumnIndices.map((i) => safeTableData[0][i]);
+      const headers = ["S. No", ...filteredHeaders];
+
+      // Filter rows
+      const serialData = processedData.map((row, index) => {
+        const filteredRow = nonEmptyColumnIndices.map((i) => row[i]);
+        return [index + 1, ...filteredRow];
+      });
 
       doc.autoTable({
         head: [headers],
@@ -441,15 +559,11 @@ const MMToMM = () => {
           const cellText = data.cell.text[0];
           const arrowImagePath = arrowImages[cellText];
 
+          // Show only the image, remove the text
           if (arrowImagePath && data.column.index === 4) {
+            // Clear cell background
             doc.setFillColor(255, 255, 255);
-            doc.rect(
-              data.cell.x,
-              data.cell.y,
-              data.cell.width,
-              data.cell.height,
-              "F"
-            );
+            doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
 
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
@@ -457,6 +571,7 @@ const MMToMM = () => {
             const imageWidth = maxImageSize;
             const imageHeight = maxImageSize;
 
+            // Draw arrow image centered
             doc.addImage(
               arrowImagePath,
               "PNG",
@@ -465,10 +580,23 @@ const MMToMM = () => {
               imageWidth,
               imageHeight
             );
-          }
-        },
-      });
 
+            // Remove text from being rendered
+            data.cell.text = [];
+          }
+
+          // Bold vertical line between PCS and WIDTH(MM) in header
+          if (data.row.index === 0 && data.column.index === 3) {
+            const xStart = data.cell.x + data.cell.width;
+            const yTop = data.cell.y;
+            const yBottom = data.cell.y + data.cell.height;
+
+            doc.setDrawColor(0);
+            doc.setLineWidth(0.8);
+            doc.line(xStart, yTop, xStart, yBottom);
+          }
+        }
+      });
       const finalY = doc.lastAutoTable.finalY + 10;
       doc.setFont("helvetica", "bold");
       doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
@@ -781,8 +909,14 @@ const MMToMM = () => {
         <Button className="mb-2 me-2" color="primary" onClick={addColumn}>
           Add Column
         </Button>
+        <Button className="mb-2 me-2" color="danger" onClick={removeColumn}>
+          Remove Column
+        </Button>
         <Button className="mb-2 ml-2 me-2" color="primary" onClick={addRow}>
           Add Row
+        </Button>
+        <Button className="mb-2 me-2" color="danger" onClick={removeRow}>
+          Remove Row
         </Button>
         <Button className="mb-2 me-2" color="success" onClick={downloadExcel}>
           Download Excel
