@@ -634,13 +634,14 @@ const ClientMenu = () => {
     });
     return images;
   };
-  // const colorImages = importAll(
-  //   require.context(
-  //     "../../assets/images/color_code",
-  //     false,
-  //     /\.(png|jpe?g|svg)$/
-  //   )
-  // );
+  
+  const colorImages = importAll(
+    require.context(
+      "../../assets/images/color_code",
+      false,
+      /\.(png|jpe?g|svg)$/
+    )
+  );
 
   const colorOptions = useMemo(() => {
     const options = Object.keys(colorImages)
