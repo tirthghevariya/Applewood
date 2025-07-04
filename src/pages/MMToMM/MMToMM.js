@@ -37,6 +37,7 @@ const MMToMM = () => {
   const [field2, setField2] = useState(edge.toString());
   const [isLuminateFieldVisible, setIsLuminateFieldVisible] = useState(false);
   const [luminate, setLuminate] = useState("");
+  const [selectedRows, setSelectedRows] = useState([]);
 
   registerAllModules();
   const arrowMap = {
@@ -59,6 +60,14 @@ const MMToMM = () => {
     return `${day}-${month}-${year}`;
   };
 
+  const [date, setDate] = useState(formatDateToDMY(new Date()));
+  const [clientName, setClientName] = useState("");
+  const [book, setBook] = useState("");
+  const [selectedColor, setSelectedColor] = useState("AW_301");
+  const [isOpen, setIsOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [totalPCS, setTotalPCS] = useState(0);
+
   useEffect(() => {
     const fetchBatchNumber = async () => {
       try {
@@ -77,57 +86,6 @@ const MMToMM = () => {
     setField1(tools.toString());
     setField2(edge.toString());
   }, [tools, edge]);
-
-  const [date, setDate] = useState(formatDateToDMY(new Date()));
-  const [clientName, setClientName] = useState("");
-  const [book, setBook] = useState("");
-
-  useEffect(() => {
-    const fetchBatchNumber = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, "batchNumber"));
-        const batchData = querySnapshot.docs[0]?.data();
-        if (batchData && batchData.batchNumber) {
-          setBatchNumber(parseFloat(batchData.batchNumber));
-        }
-      } catch (error) {
-        console.error("Error fetching batch number:", error);
-      }
-    };
-    fetchBatchNumber();
-  }, []);
-
-  const handleFormSubmit = async () => {
-    const toolsValue = parseFloat(field1);
-    const edgeBandValue = parseFloat(field2);
-
-    if (isNaN(toolsValue) || isNaN(edgeBandValue)) {
-      alert("Please enter valid numeric values for Tools and Edge band.");
-      return;
-    }
-    const calculatedValue = (toolsValue + edgeBandValue) / 2;
-    const finalBatchNumber = calculatedValue;
-    try {
-      const newRecord = {
-        tools: toolsValue,
-        edgeBand: edgeBandValue,
-        batchNumber: parseFloat(finalBatchNumber.toFixed(2)),
-      };
-      const batchRef = doc(db, "batchNumber", "rA2ORPJZleb2WWbHLMav");
-      await updateDoc(batchRef, newRecord);
-      dispatch(
-        showToast({
-          type: "success",
-          msg: "Batch Number updated successfully",
-        })
-      );
-      toggleModal();
-      window.location.reload();
-    } catch (error) {
-      console.error("Error adding record to Firebase:", error);
-      alert("Failed to add record.");
-    }
-  };
 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem("userData"));
@@ -158,8 +116,81 @@ const MMToMM = () => {
     setTableData((prevData) => [...prevData, ...newRows]);
   };
 
+  const insertRowAbove = () => {
+    if (selectedRows.length === 0) {
+      dispatch(showToast({
+        type: "warning",
+        msg: "Please select at least one row to insert above"
+      }));
+      return;
+    }
+
+    const insertAt = Math.min(...selectedRows);
+    setTableData(prevData => {
+      const newData = [...prevData];
+      const emptyRow = Array(prevData[0].length).fill("");
+      newData.splice(insertAt, 0, emptyRow);
+      return newData;
+    });
+
+    setSelectedRows(selectedRows.map(row => row >= insertAt ? row + 1 : row));
+    dispatch(showToast({
+      type: "success",
+      msg: `Row inserted above row ${insertAt}`
+    }));
+  };
+
+  const insertRowBelow = () => {
+    if (selectedRows.length === 0) {
+      dispatch(showToast({
+        type: "warning",
+        msg: "Please select at least one row to insert below"
+      }));
+      return;
+    }
+
+    const insertAt = Math.max(...selectedRows) + 1;
+    setTableData(prevData => {
+      const newData = [...prevData];
+      const emptyRow = Array(prevData[0].length).fill("");
+      newData.splice(insertAt, 0, emptyRow);
+      return newData;
+    });
+
+    dispatch(showToast({
+      type: "success",
+      msg: `Row inserted below row ${insertAt}`
+    }));
+  };
+
+  const removeSelectedRows = () => {
+    if (selectedRows.length === 0) {
+      dispatch(showToast({
+        type: "warning",
+        msg: "Please select at least one row to remove"
+      }));
+      return;
+    }
+
+    setTableData(prevData => {
+      const newData = [...prevData];
+      [...selectedRows].sort((a, b) => b - a).forEach(row => {
+        if (row > 0) {
+          newData.splice(row, 1);
+        }
+      });
+      return newData;
+    });
+
+    setSelectedRows([]);
+    dispatch(showToast({
+      type: "success",
+      msg: `${selectedRows.length} row(s) removed`
+    }));
+  };
+
   const removeColumn = () => {
-    if (tableData[0].length <= 8) { // Keep at least the original 8 columns
+    if (tableData[0].length <= 8) {
       dispatch(
         showToast({
           type: "warning",
@@ -170,7 +201,7 @@ const MMToMM = () => {
     }
 
     setTableData(prevData =>
-      prevData.map(row => row.slice(0, -1)) // Remove last column from each row
+      prevData.map(row => row.slice(0, -1))
     );
 
     dispatch(
@@ -182,7 +213,12 @@ const MMToMM = () => {
   };
 
   const removeRow = () => {
-    if (tableData.length <= 2) { // Keep at least header row + 1 data row
+    if (selectedRows.length > 0) {
+      removeSelectedRows();
+      return;
+    }
+
+    if (tableData.length <= 2) {
       dispatch(
         showToast({
           type: "warning",
@@ -193,11 +229,10 @@ const MMToMM = () => {
     }
 
     setTableData(prevData => prevData.slice(0, -10));
-
     dispatch(
       showToast({
         type: "success",
-        msg: "Last row removed successfully",
+        msg: "Last 10 rows removed successfully",
       })
     );
   };
@@ -214,7 +249,6 @@ const MMToMM = () => {
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     XLSX.writeFile(wb, fileName);
   };
-
 
   const fetchImageAsBase64 = async (imagePath) => {
     return new Promise((resolve, reject) => {
@@ -340,49 +374,6 @@ const MMToMM = () => {
         return [index + 1, ...filteredRow];
       });
 
-      const removeColumn = () => {
-        if (tableData[0].length <= 8) { // Keep at least the original 8 columns
-          dispatch(
-            showToast({
-              type: "warning",
-              msg: "Cannot remove more columns - minimum columns reached",
-            })
-          );
-          return;
-        }
-
-        setTableData(prevData =>
-          prevData.map(row => row.slice(0, -1)) // Remove last column from each row
-        );
-
-        dispatch(
-          showToast({
-            type: "success",
-            msg: "Last column removed successfully",
-          })
-        );
-      };
-
-      const removeRow = () => {
-        if (tableData.length <= 2) { // Keep at least header row + 1 data row
-          dispatch(
-            showToast({
-              type: "warning",
-              msg: "Cannot remove more rows - minimum rows reached",
-            })
-          );
-          return;
-        }
-
-        setTableData(prevData => prevData.slice(0, -10));
-
-        dispatch(
-          showToast({
-            type: "success",
-            msg: "Last row removed successfully",
-          })
-        );
-      };
       doc.autoTable({
         head: [headers],
         body: serialData,
@@ -739,9 +730,6 @@ const MMToMM = () => {
     setDate(`${day}-${month}-${year}`);
   };
 
-  const [selectedColor, setSelectedColor] = useState("AW_301");
-  const [isOpen, setIsOpen] = useState(false);
-
   const importAll = (r) => {
     let images = {};
     r.keys().forEach((item) => {
@@ -784,11 +772,41 @@ const MMToMM = () => {
 
   const toggleTooltip = () => setTooltipOpen(!tooltipOpen);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const toggleModal = () => {
     setIsModalOpen(!isModalOpen);
   };
-  const [totalPCS, setTotalPCS] = useState(0);
+
+  const handleFormSubmit = async () => {
+    const toolsValue = parseFloat(field1);
+    const edgeBandValue = parseFloat(field2);
+
+    if (isNaN(toolsValue) || isNaN(edgeBandValue)) {
+      alert("Please enter valid numeric values for Tools and Edge band.");
+      return;
+    }
+    const calculatedValue = (toolsValue + edgeBandValue) / 2;
+    const finalBatchNumber = calculatedValue;
+    try {
+      const newRecord = {
+        tools: toolsValue,
+        edgeBand: edgeBandValue,
+        batchNumber: parseFloat(finalBatchNumber.toFixed(2)),
+      };
+      const batchRef = doc(db, "batchNumber", "rA2ORPJZleb2WWbHLMav");
+      await updateDoc(batchRef, newRecord);
+      dispatch(
+        showToast({
+          type: "success",
+          msg: "Batch Number updated successfully",
+        })
+      );
+      toggleModal();
+      window.location.reload();
+    } catch (error) {
+      console.error("Error adding record to Firebase:", error);
+      alert("Failed to add record.");
+    }
+  };
 
   const calculateTotalPCS = () => {
     const total = tableData
@@ -902,7 +920,6 @@ const MMToMM = () => {
                 />
               </div>
             )}
-
           </div>
         </div>
 
@@ -911,6 +928,15 @@ const MMToMM = () => {
         </Button>
         <Button className="mb-2 me-2" color="danger" onClick={removeColumn}>
           Remove Column
+        </Button>
+        <Button className="mb-2 me-2" color="primary" onClick={insertRowAbove}>
+          Insert Row Above
+        </Button>
+        <Button className="mb-2 me-2" color="primary" onClick={insertRowBelow}>
+          Insert Row Below
+        </Button>
+        <Button className="mb-2 me-2" color="danger" onClick={removeSelectedRows}>
+          Remove Selected Rows
         </Button>
         <Button className="mb-2 ml-2 me-2" color="primary" onClick={addRow}>
           Add Row
@@ -966,16 +992,32 @@ const MMToMM = () => {
           stretchH="all"
           licenseKey="non-commercial-and-evaluation"
           afterChange={handleTableChange}
+          selectionMode="multiple"
+          afterSelection={(r, c, r2, c2) => {
+            const start = Math.min(r, r2);
+            const end = Math.max(r, r2);
+            const rows = [];
+            for (let i = start; i <= end; i++) {
+              rows.push(i);
+            }
+            setSelectedRows(rows);
+          }}
           cells={(row, col, prop) => {
             const cellProperties = {};
             const rowData = tableData[row] || [];
 
-            // Check if any cell in the row contains a special value
             const containsSpecialValue = rowData.some(
               (cellValue) => /aw/i.test(cellValue) && cellValue !== "Drawer"
             );
 
-            // Apply highlight for rows with special values
+            if (selectedRows.includes(row)) {
+              cellProperties.renderer = (instance, td, row, col, prop, value) => {
+                td.style.backgroundColor = "#e3f2fd";
+                td.style.fontWeight = "bold";
+                td.textContent = value || "";
+              };
+            }
+
             if (containsSpecialValue) {
               cellProperties.renderer = (
                 instance,
@@ -985,12 +1027,11 @@ const MMToMM = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#ffeb3b"; // Highlight yellow
+                td.style.backgroundColor = "#ffeb3b";
                 td.style.fontWeight = "bold";
                 td.textContent = value || "";
               };
             } else if (row === 0) {
-              // Apply green background for the first row
               cellProperties.renderer = (
                 instance,
                 td,
@@ -999,13 +1040,12 @@ const MMToMM = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#059862"; // Green background
+                td.style.backgroundColor = "#059862";
                 td.style.fontWeight = "bold";
                 td.textContent = value;
               };
             }
 
-            // Additional logic for Remark (col 3) and Remark 2 (col 4)
             if ((col === 3 || col === 4) && row > 0) {
               cellProperties.renderer = (
                 instance,
@@ -1015,10 +1055,10 @@ const MMToMM = () => {
                 prop,
                 value
               ) => {
-                td.innerHTML = ""; // Clear any existing content
+                td.innerHTML = "";
                 let text = "";
                 let imageNumber = "";
-                const hasPlus = value?.includes("+"); // Check if "+" exists
+                const hasPlus = value?.includes("+");
 
                 const placeholderMap = {
                   c: "Cross",
@@ -1033,50 +1073,42 @@ const MMToMM = () => {
                   ar: "Drawer",
                 };
 
-                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i); // Match key, number, and optional "+"
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i);
 
-                // Handle matching and placeholder conversion
                 if (match) {
-                  const key = match[1]?.toLowerCase(); // Extract key
-                  const number = match[2]; // Extract number
+                  const key = match[1]?.toLowerCase();
+                  const number = match[2];
 
-                  // Map placeholder text using key
                   if (key && placeholderMap[key]) {
                     text = placeholderMap[key];
                   }
 
-                  // Check for a valid image number
                   if (number && ["1", "2", "3", "5"].includes(number)) {
                     imageNumber = number;
                   }
                 }
 
-                // Apply yellow background if "+" exists
                 if (hasPlus || containsSpecialValue) {
-                  td.style.backgroundColor = "#ffeb3b"; // Yellow background
-                  td.style.fontWeight = "bold"; // Bold text
+                  td.style.backgroundColor = "#ffeb3b";
+                  td.style.fontWeight = "bold";
                 }
 
-                // If a valid image number is present, show the image
                 if (imageNumber) {
-                  const imgSrc = arrowMap[imageNumber]; // Use your map for image sources
+                  const imgSrc = arrowMap[imageNumber];
                   if (imgSrc) {
                     const img = document.createElement("img");
                     img.src = imgSrc;
                     img.style.maxWidth = "20px";
                     img.style.maxHeight = "20px";
                     img.style.marginLeft = "8px";
-                    td.appendChild(img); // Append the image to the cell
+                    td.appendChild(img);
                   }
-                  // Hide text when an image is displayed
                   text = "";
                 }
 
-                // If no image, show placeholder text (e.g., "Fix", "Glass")
                 if (text) {
                   td.textContent = text;
                 } else if (!imageNumber) {
-                  // If no match, show raw value
                   td.textContent = value || "";
                 }
               };
@@ -1086,6 +1118,7 @@ const MMToMM = () => {
           }}
         />
       </div>
+
       <Modal isOpen={isModalOpen} toggle={toggleModal}>
         <ModalHeader toggle={toggleModal}>Add Batch Number</ModalHeader>
         <ModalBody>
