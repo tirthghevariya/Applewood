@@ -35,6 +35,8 @@ const ClientMenu = () => {
     ...Array(300).fill(["", "", "", ""]),
   ]);
 
+  const [selectedRows, setSelectedRows] = useState([]);
+
   const formatDateToDMY = (date) => {
     const d = new Date(date);
     const day = String(d.getDate()).padStart(2, "0");
@@ -76,12 +78,84 @@ const ClientMenu = () => {
 
   const addRow = () => {
     const newRows = Array(50).fill(Array(tableData[0].length).fill(""));
-
     setTableData((prevData) => [...prevData, ...newRows]);
   };
 
+  const insertRowAbove = () => {
+    if (selectedRows.length === 0) {
+      dispatch(showToast({
+        type: "warning",
+        msg: "Please select at least one row to insert above"
+      }));
+      return;
+    }
+
+    const insertAt = Math.min(...selectedRows);
+    setTableData(prevData => {
+      const newData = [...prevData];
+      const emptyRow = Array(prevData[0].length).fill("");
+      newData.splice(insertAt, 0, emptyRow);
+      return newData;
+    });
+
+    dispatch(showToast({
+      type: "success",
+      msg: `Row inserted above row ${insertAt}`
+    }));
+  };
+
+  const insertRowBelow = () => {
+    if (selectedRows.length === 0) {
+      dispatch(showToast({
+        type: "warning",
+        msg: "Please select at least one row to insert below"
+      }));
+      return;
+    }
+
+    const insertAt = Math.max(...selectedRows) + 1;
+    setTableData(prevData => {
+      const newData = [...prevData];
+      const emptyRow = Array(prevData[0].length).fill("");
+      newData.splice(insertAt, 0, emptyRow);
+      return newData;
+    });
+
+    dispatch(showToast({
+      type: "success",
+      msg: `Row inserted below row ${insertAt}`
+    }));
+  };
+
+  const removeSelectedRows = () => {
+    if (selectedRows.length === 0) {
+      dispatch(showToast({
+        type: "warning",
+        msg: "Please select at least one row to remove"
+      }));
+      return;
+    }
+
+    setTableData(prevData => {
+      const newData = [...prevData];
+      // Remove rows in reverse order to avoid index shifting issues
+      [...selectedRows].sort((a, b) => b - a).forEach(row => {
+        if (row > 0) { // Don't remove header row
+          newData.splice(row, 1);
+        }
+      });
+      return newData;
+    });
+
+    setSelectedRows([]);
+    dispatch(showToast({
+      type: "success",
+      msg: `${selectedRows.length} row(s) removed`
+    }));
+  };
+
   const removeColumn = () => {
-    if (tableData[0].length <= 5) { // Keep at least the original 8 columns
+    if (tableData[0].length <= 5) {
       dispatch(
         showToast({
           type: "warning",
@@ -92,7 +166,7 @@ const ClientMenu = () => {
     }
 
     setTableData(prevData =>
-      prevData.map(row => row.slice(0, -1)) // Remove last column from each row
+      prevData.map(row => row.slice(0, -1))
     );
 
     dispatch(
@@ -104,7 +178,14 @@ const ClientMenu = () => {
   };
 
   const removeRow = () => {
-    if (tableData.length <= 2) { // Keep at least header row + 1 data row
+    // If rows are selected, remove those instead
+    if (selectedRows.length > 0) {
+      removeSelectedRows();
+      return;
+    }
+
+    // Original remove last row logic
+    if (tableData.length <= 2) {
       dispatch(
         showToast({
           type: "warning",
@@ -115,11 +196,10 @@ const ClientMenu = () => {
     }
 
     setTableData(prevData => prevData.slice(0, -10));
-
     dispatch(
       showToast({
         type: "success",
-        msg: "Last row removed successfully",
+        msg: "Last 10 rows removed successfully",
       })
     );
   };
@@ -134,7 +214,6 @@ const ClientMenu = () => {
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     XLSX.writeFile(wb, fileName);
   };
-
 
   const fetchImageAsBase64 = async (imagePath) => {
     return new Promise((resolve, reject) => {
@@ -184,10 +263,9 @@ const ClientMenu = () => {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
 
-    let currentY = 10; // Start Y position for the content
-    const lineSpacing = 10; // Space between each line of text
+    let currentY = 10;
+    const lineSpacing = 10;
 
-    // Add text fields with proper spacing
     doc.text(`Date: ${date}`, 10, currentY);
     currentY += lineSpacing;
 
@@ -205,7 +283,6 @@ const ClientMenu = () => {
       currentY += lineSpacing;
     }
 
-    // Handle color image (optional)
     const selectedColorImage =
       colorImages[selectedColor.replace(" ", "_")] || null;
     let colorImageBase64 = null;
@@ -250,7 +327,6 @@ const ClientMenu = () => {
       5: await fetchImageAsBase64(upArrow),
     };
 
-    // Process table data
     const processedData = filteredData.map((row) => {
       return row.map((cell) => {
         if (["1", "2", "3", "5"].includes(cell)) {
@@ -260,7 +336,6 @@ const ClientMenu = () => {
       });
     });
 
-    // Determine non-empty column indices (excluding the header)
     const nonEmptyColumnIndices = safeTableData[0]
       .map((_, colIndex) =>
         filteredData.some((row) => row[colIndex]?.trim() !== "")
@@ -268,18 +343,14 @@ const ClientMenu = () => {
       .map((hasContent, i) => hasContent ? i : -1)
       .filter((i) => i !== -1);
 
-    // Filter header
     const filteredHeaders = nonEmptyColumnIndices.map((i) => safeTableData[0][i]);
     const headers = ["S. No", ...filteredHeaders];
 
-    // Filter rows
     const serialData = processedData.map((row, index) => {
       const filteredRow = nonEmptyColumnIndices.map((i) => row[i]);
       return [index + 1, ...filteredRow];
     });
 
-
-    // Render table with padding
     doc.autoTable({
       head: [headers],
       body: serialData,
@@ -294,9 +365,8 @@ const ClientMenu = () => {
         const cellText = data.cell.text[0];
         const arrowImagePath = arrowImages[cellText];
 
-        // Add image to "Remark" column (index 4) or "Remark 2" column (index 5)
         if (arrowImagePath && (data.column.index === 4 || data.column.index === 5)) {
-          doc.setFillColor(255, 255, 255); // White background for cell
+          doc.setFillColor(255, 255, 255);
           doc.rect(
             data.cell.x,
             data.cell.y,
@@ -323,16 +393,13 @@ const ClientMenu = () => {
       },
     });
 
-    // Add Total PCS text below the table
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFont("helvetica", "bold");
     doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
 
-    // Sanitize client name and unit for file name
     const sanitizedClientName = clientName.toString().toLowerCase();
     const sanitizedUnit = selectedUnit.toLowerCase();
 
-    // Save the PDF
     doc.save(`${sanitizedClientName}_${date}_${sanitizedUnit}.pdf`);
   };
 
@@ -382,7 +449,6 @@ const ClientMenu = () => {
       currentY += lineSpacing;
     }
 
-    // Handle color image (optional)
     const selectedColorImage = colorImages[selectedColor.replace(" ", "_")] || null;
     let colorImageBase64 = null;
 
@@ -420,7 +486,6 @@ const ClientMenu = () => {
       return sum + pcsValue;
     }, 0);
 
-    // Fetch arrow images as Base64
     const arrowImages = {
       1: await fetchImageAsBase64(leftArrow),
       2: await fetchImageAsBase64(downArrow),
@@ -428,7 +493,6 @@ const ClientMenu = () => {
       5: await fetchImageAsBase64(upArrow),
     };
 
-    // Process table data
     const processedData = filteredData.map((row) => {
       return row.map((cell) => {
         if (["1", "2", "3", "5"].includes(cell)) {
@@ -438,7 +502,6 @@ const ClientMenu = () => {
       });
     });
 
-    // Determine non-empty column indices (excluding the header)
     const nonEmptyColumnIndices = safeTableData[0]
       .map((_, colIndex) =>
         filteredData.some((row) => row[colIndex]?.trim() !== "")
@@ -446,18 +509,14 @@ const ClientMenu = () => {
       .map((hasContent, i) => hasContent ? i : -1)
       .filter((i) => i !== -1);
 
-    // Filter header
     const filteredHeaders = nonEmptyColumnIndices.map((i) => safeTableData[0][i]);
     const headers = ["S. No", ...filteredHeaders];
 
-    // Filter rows
     const serialData = processedData.map((row, index) => {
       const filteredRow = nonEmptyColumnIndices.map((i) => row[i]);
       return [index + 1, ...filteredRow];
     });
 
-
-    // Render table with padding
     doc.autoTable({
       head: [headers],
       body: serialData,
@@ -472,8 +531,8 @@ const ClientMenu = () => {
         const cellText = data.cell.text[0];
         const arrowImagePath = arrowImages[cellText];
 
-        if (arrowImagePath && data.column.index === 4) { // Assuming "REMARK" is at index 4
-          doc.setFillColor(255, 255, 255); // White background for cell
+        if (arrowImagePath && data.column.index === 4) {
+          doc.setFillColor(255, 255, 255);
           doc.rect(
             data.cell.x,
             data.cell.y,
@@ -500,21 +559,18 @@ const ClientMenu = () => {
       },
     });
 
-    // Add Total PCS text below the table
     const finalY = doc.lastAutoTable.finalY + 10;
     doc.setFont("helvetica", "bold");
     doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
 
-    // Open PDF in a new tab
     window.open(doc.output("bloburl"));
   };
-
 
   const importFile = () => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".xlsx, .xls";
-    input.style.display = "none"; // Hidden input
+    input.style.display = "none";
 
     input.addEventListener("change", (event) => {
       const file = event.target.files[0];
@@ -527,24 +583,23 @@ const ClientMenu = () => {
         const workbook = XLSX.read(data, { type: "array" });
         const sheetName = workbook.SheetNames[0];
         const sheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert to array of arrays
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
         if (jsonData.length > 1) {
-          const [, ...rows] = jsonData; // Skip the first row (headers) and get the remaining rows
+          const [, ...rows] = jsonData;
 
-          // Ensure that we do not pass a negative value to Array
           const emptyRowsToAdd = Math.max(0, 300 - rows.length);
 
           const updatedData = [
-            ...tableData.slice(0, 1), // Keep the original header row
-            ...rows, // Add the rows from the Excel file
-            ...Array(emptyRowsToAdd).fill(["", "", "", "", "", "", ""]), // Fill remaining rows with empty data
+            ...tableData.slice(0, 1),
+            ...rows,
+            ...Array(emptyRowsToAdd).fill(["", "", "", "", "", "", ""]),
           ];
 
           setTableData(updatedData);
 
           rows.forEach((rowData, rowIndex) => {
-            const row = rowIndex + 1; // Adjust for headers
+            const row = rowIndex + 1;
             rowData.forEach((cellValue, colIndex) => {
               handleTableChange([[row, colIndex, tableData[row]?.[colIndex], cellValue]], "import");
             });
@@ -555,7 +610,6 @@ const ClientMenu = () => {
       reader.readAsArrayBuffer(file);
     });
 
-    // Trigger file input click
     input.click();
   };
 
@@ -568,7 +622,6 @@ const ClientMenu = () => {
           if (newValue !== oldValue) {
             const isSpecialValue = /aw/i.test(newValue) || newValue === "+";
 
-            // Handle Remark and Remark 2 logic
             if (col === 3 || col === 4) {
               const placeholderMap = {
                 c: "Cross",
@@ -634,7 +687,7 @@ const ClientMenu = () => {
     });
     return images;
   };
-  
+
   const colorImages = importAll(
     require.context(
       "../../assets/images/color_code",
@@ -733,7 +786,7 @@ const ClientMenu = () => {
               <Input type="text"
                 readOnly value={selectedColor.split(".")[0]}
                 onClick={() => setIsOpen(!isOpen)}
-                className="form-control dropdown-toggle cursor-pointer" />``
+                className="form-control dropdown-toggle cursor-pointer" />
               {isOpen && (
                 <div className="dropdown-menu show"
                   style={{
@@ -789,6 +842,15 @@ const ClientMenu = () => {
         <Button className="mb-2 me-2" color="danger" onClick={removeColumn}>
           Remove Column
         </Button>
+        <Button className="mb-2 me-2" color="primary" onClick={insertRowAbove}>
+          Insert Row Above
+        </Button>
+        <Button className="mb-2 me-2" color="primary" onClick={insertRowBelow}>
+          Insert Row Below
+        </Button>
+        <Button className="mb-2 me-2" color="danger" onClick={removeSelectedRows}>
+          Remove Selected Rows
+        </Button>
         <Button className="mb-2 ml-2 me-2" color="primary" onClick={addRow}>
           Add Row
         </Button>
@@ -827,6 +889,16 @@ const ClientMenu = () => {
           stretchH="all"
           licenseKey="non-commercial-and-evaluation"
           afterChange={handleTableChange}
+          selectionMode="multiple"
+          afterSelection={(r, c, r2, c2) => {
+            const start = Math.min(r, r2);
+            const end = Math.max(r, r2);
+            const rows = [];
+            for (let i = start; i <= end; i++) {
+              rows.push(i);
+            }
+            setSelectedRows(rows);
+          }}
           cells={(row, col) => {
             const cellProperties = {};
             const rowData = tableData[row] || [];
@@ -834,6 +906,15 @@ const ClientMenu = () => {
             const containsSpecialValue = rowData.some(
               (cellValue) => /aw/i.test(cellValue) && cellValue !== "Drawer"
             );
+
+            // Highlight selected rows
+            if (selectedRows.includes(row)) {
+              cellProperties.renderer = (instance, td, row, col, prop, value) => {
+                td.style.backgroundColor = "#e3f2fd";
+                td.style.fontWeight = "bold";
+                td.textContent = value || "";
+              };
+            }
 
             if (containsSpecialValue) {
               cellProperties.renderer = (
@@ -844,12 +925,11 @@ const ClientMenu = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#ffeb3b"; // Highlight yellow
+                td.style.backgroundColor = "#ffeb3b";
                 td.style.fontWeight = "bold";
                 td.textContent = value || "";
               };
             } else if (row === 0) {
-              // Apply green background for the first row
               cellProperties.renderer = (
                 instance,
                 td,
@@ -858,13 +938,12 @@ const ClientMenu = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#059862"; // Green background
+                td.style.backgroundColor = "#059862";
                 td.style.fontWeight = "bold";
                 td.textContent = value;
               };
             }
 
-            // Additional logic for Remark (col 3) and Remark 2 (col 4)
             if ((col === 3 || col === 4) && row > 0) {
               cellProperties.renderer = (
                 instance,
@@ -874,10 +953,10 @@ const ClientMenu = () => {
                 prop,
                 value
               ) => {
-                td.innerHTML = ""; // Clear any existing content
+                td.innerHTML = "";
                 let text = "";
                 let imageNumber = "";
-                const hasPlus = value?.includes("+"); // Check if "+" exists
+                const hasPlus = value?.includes("+");
 
                 const placeholderMap = {
                   c: "Cross",
@@ -892,50 +971,42 @@ const ClientMenu = () => {
                   ar: "Drawer",
                 };
 
-                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i); // Match key, number, and optional "+"
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i);
 
-                // Handle matching and placeholder conversion
                 if (match) {
-                  const key = match[1]?.toLowerCase(); // Extract key
-                  const number = match[2]; // Extract number
+                  const key = match[1]?.toLowerCase();
+                  const number = match[2];
 
-                  // Map placeholder text using key
                   if (key && placeholderMap[key]) {
                     text = placeholderMap[key];
                   }
 
-                  // Check for a valid image number
                   if (number && ["1", "2", "3", "5"].includes(number)) {
                     imageNumber = number;
                   }
                 }
 
-                // Apply yellow background if "+" exists
                 if (hasPlus || containsSpecialValue) {
-                  td.style.backgroundColor = "#ffeb3b"; // Yellow background
-                  td.style.fontWeight = "bold"; // Bold text
+                  td.style.backgroundColor = "#ffeb3b";
+                  td.style.fontWeight = "bold";
                 }
 
-                // If a valid image number is present, show the image
                 if (imageNumber) {
-                  const imgSrc = arrowMap[imageNumber]; // Use your map for image sources
+                  const imgSrc = arrowMap[imageNumber];
                   if (imgSrc) {
                     const img = document.createElement("img");
                     img.src = imgSrc;
                     img.style.maxWidth = "20px";
                     img.style.maxHeight = "20px";
                     img.style.marginLeft = "8px";
-                    td.appendChild(img); // Append the image to the cell
+                    td.appendChild(img);
                   }
-                  // Hide text when an image is displayed
                   text = "";
                 }
 
-                // If no image, show placeholder text (e.g., "Fix", "Glass")
                 if (text) {
                   td.textContent = text;
                 } else if (!imageNumber) {
-                  // If no match, show raw value
                   td.textContent = value || "";
                 }
               };
@@ -944,8 +1015,6 @@ const ClientMenu = () => {
             return cellProperties;
           }}
         />
-
-
       </div>
     </React.Fragment>
   );
