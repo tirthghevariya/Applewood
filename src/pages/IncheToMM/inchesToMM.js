@@ -25,7 +25,6 @@ import leftArrow from "../../assets/images/left.png";
 import upArrow from "../../assets/images/up.png";
 import rightArrow from "../../assets/images/right.png";
 import downArrow from "../../assets/images/down.png";
-import { FixedSizeList as List } from 'react-window';
 
 const InchesToMM = () => {
   const navigate = useNavigate();
@@ -34,7 +33,6 @@ const InchesToMM = () => {
   const [edge, setEdge] = useState(0);
   const dispatch = useDispatch();
   const [isSpecial, setIsSpecial] = useState(false);
-
   const [tooltipOpen, setTooltipOpen] = useState(false);
   registerAllModules();
 
@@ -49,6 +47,8 @@ const InchesToMM = () => {
     ["WIDTH", "HEIGHT", "PCS", "REMARK", "REMARK 2", "WIDTH(MM)", "HEIGHT(MM)", "PCS"],
     ...Array(100).fill(["", "", "", "", "", "", "", ""]),
   ]);
+
+  const [selectedRows, setSelectedRows] = useState([]);
 
   const formatDateToDMY = (date) => {
     const d = new Date(date);
@@ -89,7 +89,6 @@ const InchesToMM = () => {
       }
     };
 
-    // Fetch batch number
     fetchBatchNumber();
 
     const userData = JSON.parse(localStorage.getItem("userData"));
@@ -98,18 +97,15 @@ const InchesToMM = () => {
       return;
     }
 
-    // Check for super admin user and redirect if applicable
     const superAdminUser = JSON.parse(localStorage.getItem("superAdminUser"));
     if (superAdminUser && superAdminUser?.userType === "main_admin") {
       navigate("/entries");
-      return; // Prevents setting fields if navigating away
+      return;
     }
 
-    // Set fields based on tools and edge values
     setField1(tools.toString());
     setField2(edge.toString());
   }, [navigate, tools, edge]);
-
 
   const addColumn = () => {
     const newTableData = tableData.map((row, index) => {
@@ -123,8 +119,128 @@ const InchesToMM = () => {
 
   const addRow = () => {
     const newRows = Array(50).fill(Array(tableData[0].length).fill(""));
-
     setTableData((prevData) => [...prevData, ...newRows]);
+  };
+
+  const insertRowAbove = () => {
+    if (selectedRows.length === 0) {
+      dispatch(showToast({
+        type: "warning",
+        msg: "Please select at least one row to insert above"
+      }));
+      return;
+    }
+
+    const insertAt = Math.min(...selectedRows);
+    setTableData(prevData => {
+      const newData = [...prevData];
+      const emptyRow = Array(prevData[0].length).fill("");
+      newData.splice(insertAt, 0, emptyRow);
+      return newData;
+    });
+
+    setSelectedRows(selectedRows.map(row => row >= insertAt ? row + 1 : row));
+    dispatch(showToast({
+      type: "success",
+      msg: `Row inserted above row ${insertAt}`
+    }));
+  };
+
+  const insertRowBelow = () => {
+    if (selectedRows.length === 0) {
+      dispatch(showToast({
+        type: "warning",
+        msg: "Please select at least one row to insert below"
+      }));
+      return;
+    }
+
+    const insertAt = Math.max(...selectedRows) + 1;
+    setTableData(prevData => {
+      const newData = [...prevData];
+      const emptyRow = Array(prevData[0].length).fill("");
+      newData.splice(insertAt, 0, emptyRow);
+      return newData;
+    });
+
+    dispatch(showToast({
+      type: "success",
+      msg: `Row inserted below row ${insertAt}`
+    }));
+  };
+
+  const removeSelectedRows = () => {
+    if (selectedRows.length === 0) {
+      dispatch(showToast({
+        type: "warning",
+        msg: "Please select at least one row to remove"
+      }));
+      return;
+    }
+
+    setTableData(prevData => {
+      const newData = [...prevData];
+      [...selectedRows].sort((a, b) => b - a).forEach(row => {
+        if (row > 0) {
+          newData.splice(row, 1);
+        }
+      });
+      return newData;
+    });
+
+    setSelectedRows([]);
+    dispatch(showToast({
+      type: "success",
+      msg: `${selectedRows.length} row(s) removed`
+    }));
+  };
+
+  const removeColumn = () => {
+    if (tableData[0].length <= 8) {
+      dispatch(
+        showToast({
+          type: "warning",
+          msg: "Cannot remove more columns - minimum columns reached",
+        })
+      );
+      return;
+    }
+
+    setTableData(prevData =>
+      prevData.map(row => row.slice(0, -1))
+    );
+
+    dispatch(
+      showToast({
+        type: "success",
+        msg: "Last column removed successfully",
+      })
+    );
+  };
+
+  const removeRow = () => {
+    if (selectedRows.length > 0) {
+      removeSelectedRows();
+      return;
+    }
+
+    if (tableData.length <= 2) {
+      dispatch(
+        showToast({
+          type: "warning",
+          msg: "Cannot remove more rows - minimum rows reached",
+        })
+      );
+      return;
+    }
+
+    setTableData(prevData => prevData.slice(0, -10));
+    dispatch(
+      showToast({
+        type: "success",
+        msg: "Last 10 rows removed successfully",
+      })
+    );
   };
 
   const downloadExcel = () => {
@@ -138,6 +254,24 @@ const InchesToMM = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
     XLSX.writeFile(wb, fileName);
+  };
+
+  const fetchImageAsBase64 = async (imagePath) => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = imagePath;
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0);
+        const base64 = canvas.toDataURL("image/png");
+        resolve(base64);
+      };
+      img.onerror = (error) => reject(error);
+    });
   };
 
   const workPDF = async () => {
@@ -223,7 +357,6 @@ const InchesToMM = () => {
       doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
     }
 
-    // Step 1: Filter out empty columns
     const columnsToKeep = headers.reduce((acc, header, colIndex) => {
       const hasData = filteredData.some(row => {
         const cell = row[colIndex];
@@ -233,11 +366,9 @@ const InchesToMM = () => {
       return acc;
     }, []);
 
-    // Step 2: Rebuild headers and filtered data
     const filteredHeaders = headers.filter((_, index) => columnsToKeep.includes(index));
     const cleanedData = filteredData.map(row => columnsToKeep.map(i => row[i]));
 
-    // Step 3: Add Serial Numbers
     const serialData = cleanedData.map((row, index) => [index + 1, ...row]);
     const finalHeaders = ["S. No", ...filteredHeaders];
 
@@ -254,16 +385,13 @@ const InchesToMM = () => {
 
         const remarkColumnIndex = finalHeaders.indexOf("REMARK");
         const remark2ColumnIndex = finalHeaders.indexOf("REMARK 2");
-        // Draw vertical bold line between PCS and WIDTH(MM)
         const pcsIndex = finalHeaders.indexOf("PCS");
         if (data.column.index === pcsIndex) {
           const { x, y, height } = data.cell;
-
-          // Draw bold line on the right side of PCS cell
           doc.setDrawColor(0);
-          doc.setLineWidth(0.8); // Thicker line
+          doc.setLineWidth(0.8);
           doc.line(x + data.cell.width, y, x + data.cell.width, y + height);
-          doc.setLineWidth(0.1); // Reset to normal
+          doc.setLineWidth(0.1);
         }
 
         if (data.column.index === remarkColumnIndex || data.column.index === remark2ColumnIndex) {
@@ -271,10 +399,9 @@ const InchesToMM = () => {
           const remarkImage = arrowImages[cellText];
 
           if (remarkImage) {
-            doc.setFillColor(255, 255, 255); // Clear background
+            doc.setFillColor(255, 255, 255);
             doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
 
-            // Add the image centered in the cell
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
             const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
@@ -360,7 +487,6 @@ const InchesToMM = () => {
       return newRow;
     });
 
-
     const filteredData = reorderedData
       .filter((row) => row.some((cell) => cell && cell.trim() !== ""));
 
@@ -412,7 +538,6 @@ const InchesToMM = () => {
       doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
     }
 
-    // Step 1: Filter out empty columns
     const columnsToKeep = headers.reduce((acc, header, colIndex) => {
       const hasData = filteredData.some(row => {
         const cell = row[colIndex];
@@ -422,11 +547,9 @@ const InchesToMM = () => {
       return acc;
     }, []);
 
-    // Step 2: Rebuild headers and filtered data
     const filteredHeaders = headers.filter((_, index) => columnsToKeep.includes(index));
     const cleanedData = filteredData.map(row => columnsToKeep.map(i => row[i]));
 
-    // Step 3: Add Serial Numbers
     const serialData = cleanedData.map((row, index) => [index + 1, ...row]);
     const finalHeaders = ["S. No", ...filteredHeaders];
 
@@ -443,16 +566,13 @@ const InchesToMM = () => {
 
         const remarkColumnIndex = finalHeaders.indexOf("REMARK");
         const remark2ColumnIndex = finalHeaders.indexOf("REMARK 2");
-        // Draw vertical bold line between PCS and WIDTH(MM)
         const pcsIndex = finalHeaders.indexOf("PCS");
         if (data.column.index === pcsIndex) {
           const { x, y, height } = data.cell;
-
-          // Draw bold line on the right side of PCS cell
           doc.setDrawColor(0);
-          doc.setLineWidth(0.8); // Thicker line
+          doc.setLineWidth(0.8);
           doc.line(x + data.cell.width, y, x + data.cell.width, y + height);
-          doc.setLineWidth(0.1); // Reset to normal
+          doc.setLineWidth(0.1);
         }
 
         if (data.column.index === remarkColumnIndex || data.column.index === remark2ColumnIndex) {
@@ -460,10 +580,9 @@ const InchesToMM = () => {
           const remarkImage = arrowImages[cellText];
 
           if (remarkImage) {
-            doc.setFillColor(255, 255, 255); // Clear background
+            doc.setFillColor(255, 255, 255);
             doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
 
-            // Add the image centered in the cell
             const cellWidth = data.cell.width;
             const cellHeight = data.cell.height;
             const maxImageSize = Math.min(cellWidth, cellHeight) - 4;
@@ -479,14 +598,12 @@ const InchesToMM = () => {
               imageHeight
             );
 
-            // ✅ Redraw the border with soft color and thin line
-            doc.setDrawColor(180); // light gray
-            doc.setLineWidth(0.1); // thinner line
+            doc.setDrawColor(180);
+            doc.setLineWidth(0.1);
             doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "S");
           }
         }
       }
-
     });
 
     const pcsIndex = headers.indexOf("PCS");
@@ -500,24 +617,6 @@ const InchesToMM = () => {
     doc.text(`Total PCS: ${totalPCS}`, 10, finalY);
     const sanitizedClientName = clientName.toString().toLowerCase();
     doc.save(`${sanitizedClientName}${date}.pdf`);
-  };
-
-  const fetchImageAsBase64 = async (imagePath) => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.src = imagePath;
-      img.crossOrigin = "Anonymous";
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0);
-        const base64 = canvas.toDataURL("image/png");
-        resolve(base64);
-      };
-      img.onerror = (error) => reject(error);
-    });
   };
 
   const printPDF = async () => {
@@ -637,7 +736,6 @@ const InchesToMM = () => {
     if (colorImageBase64) {
       doc.addImage(colorImageBase64, "PNG", 130, 0, 40, 50);
     }
-    // Step 1: Filter out empty columns
     const columnsToKeep = headers.reduce((acc, header, colIndex) => {
       const hasData = filteredData.some(row => {
         const cell = row[colIndex];
@@ -647,11 +745,9 @@ const InchesToMM = () => {
       return acc;
     }, []);
 
-    // Step 2: Rebuild headers and filtered data
     const filteredHeaders = headers.filter((_, index) => columnsToKeep.includes(index));
     const cleanedData = filteredData.map(row => columnsToKeep.map(i => row[i]));
 
-    // Step 3: Add Serial Numbers
     const serialData = cleanedData.map((row, index) => [index + 1, ...row]);
     const finalHeaders = ["S. No", ...filteredHeaders];
 
@@ -659,29 +755,39 @@ const InchesToMM = () => {
       head: [finalHeaders],
       body: serialData,
       startY: tableStartY,
-      styles: { fontSize: 10 },
+      styles: {
+        fontSize: 10,
+        lineWidth: 0.5, // Thicker borders for all cells
+        lineColor: [0, 0, 0] // Black color for regular borders
+      },
       theme: "grid",
-      headStyles: { fillColor: [22, 160, 133] },
+      headStyles: {
+        fillColor: [22, 160, 133],
+        lineWidth: 0.5 // Thicker borders for header
+      },
+      columnStyles: {
+        // Apply specific style to PCS column if you know its index
+        // For example, if PCS is the 4th column (after S. No)
+        3: { cellWidth: 'auto', lineWidth: 0.5 }
+      },
 
       didDrawCell: (data) => {
         if (!data || !data.row || !data.cell) return;
 
         const remarkColumnIndex = finalHeaders.indexOf("REMARK");
         const remark2ColumnIndex = finalHeaders.indexOf("REMARK 2");
-
-        // Draw vertical bold line between PCS and WIDTH(MM)
         const pcsIndex = finalHeaders.indexOf("PCS");
+
+        // Draw special line for PCS column
         if (data.column.index === pcsIndex) {
           const { x, y, height } = data.cell;
-
-          // Draw bold line on the right side of PCS cell
-          doc.setDrawColor(0);
-          doc.setLineWidth(0.8); // Thicker line
+          doc.setDrawColor(255, 0, 0); // Red color for the line
+          doc.setLineWidth(1); // Thicker line
           doc.line(x + data.cell.width, y, x + data.cell.width, y + height);
-          doc.setLineWidth(0.1); // Reset to normal
+          doc.setDrawColor(0, 0, 0); // Reset to black
+          doc.setLineWidth(0.5); // Reset to regular border width
         }
 
-        // Your existing arrow logic remains unchanged
         if (
           data.column.index === remarkColumnIndex ||
           data.column.index === remark2ColumnIndex
@@ -695,16 +801,11 @@ const InchesToMM = () => {
 
           if (arrowImage) {
             const { x, y, width, height } = data.cell;
-
-            // Clear the text
             doc.setFillColor(255, 255, 255);
             doc.rect(x, y, width, height, "F");
-
-            // Draw border
             doc.setDrawColor(180, 180, 180);
             doc.rect(x, y, width, height, "S");
 
-            // Add image
             const maxImageSize = Math.min(width, height) - 4;
             const imageWidth = maxImageSize;
             const imageHeight = maxImageSize;
@@ -718,16 +819,13 @@ const InchesToMM = () => {
               imageHeight
             );
           } else if (containsPlus) {
-            doc.setFillColor(240, 230, 140); // Yellow
+            doc.setFillColor(240, 230, 140);
             doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "F");
-
-            // Redraw border
             doc.setDrawColor(0);
             doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, "S");
           }
         }
       },
-
     });
 
     const finalY = doc.lastAutoTable.finalY + 10;
@@ -744,12 +842,10 @@ const InchesToMM = () => {
   };
 
   const convertValue = (value, batchNumber) => {
-
     if (typeof value === "string") {
       const partss = value.split("/");
 
       if (partss.length === 2) {
-
         const calculatePart = (part) => {
           const partParts = part.split(".");
           const whole = parseFloat(partParts[0]) || 0;
@@ -793,89 +889,47 @@ const InchesToMM = () => {
   };
 
   const importFile = () => {
-
     const input = document.createElement("input");
-
     input.type = "file";
-
     input.accept = ".xlsx, .xls";
-
     input.style.display = "none";
 
-
-
     input.addEventListener("change", (event) => {
-
       const file = event.target.files[0];
-
       if (!file) return;
-
-
 
       const reader = new FileReader();
 
-
-
       reader.onload = (e) => {
-
         const data = new Uint8Array(e.target.result);
-
         const workbook = XLSX.read(data, { type: "array" });
-
         const sheetName = workbook.SheetNames[0];
-
         const sheet = workbook.Sheets[sheetName];
-
-        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 }); // Convert to array of arrays
-
-
+        const jsonData = XLSX.utils.sheet_to_json(sheet, { header: 1 });
 
         if (jsonData.length > 1) {
-
-          const [, ...rows] = jsonData; // Skip the first row (headers) and get the remaining rows
-
+          const [, ...rows] = jsonData;
           const updatedData = [
-
-            ...tableData.slice(0, 1), // Keep the original header row
-
-            ...rows, // Add the rows from the Excel file
-
-            ...Array(300 - rows.length).fill(["", "", "", "", "", "", ""]), // Fill remaining rows with empty data
-
+            ...tableData.slice(0, 1),
+            ...rows,
+            ...Array(300 - rows.length).fill(["", "", "", "", "", "", ""]),
           ];
-
-
 
           setTableData(updatedData);
 
-
-
-          // Trigger handleTableChange for imported rows
-
           rows.forEach((rowData, rowIndex) => {
-
-            const row = rowIndex + 1; // Adjust for headers
-
+            const row = rowIndex + 1;
             rowData.forEach((cellValue, colIndex) => {
-
               handleTableChange([[row, colIndex, tableData[row]?.[colIndex], cellValue]], "import");
-
             });
-
           });
-
         }
-
       };
 
-
-
       reader.readAsArrayBuffer(file);
-
     });
 
     input.click();
-
   };
 
   const handleTableChange = (changes, source) => {
@@ -931,7 +985,6 @@ const InchesToMM = () => {
               newData[row][col] = newValue;
             }
 
-            // Ensure calculations for other columns remain unchanged
             if (!isSpecialValue) {
               if (col === 0) {
                 newData[row][5] = newValue?.trim() ? convertValue(newValue, batchNumber) : "";
@@ -1021,7 +1074,6 @@ const InchesToMM = () => {
     setDate(`${day}-${month}-${year}`);
   };
 
-
   const importAll = (r) => {
     let images = {};
     r.keys().forEach((item) => {
@@ -1061,6 +1113,7 @@ const InchesToMM = () => {
     }
     setIsOpen(false);
   };
+
   const [totalPCS, setTotalPCS] = useState(0);
 
   const calculateTotalPCS = () => {
@@ -1070,49 +1123,6 @@ const InchesToMM = () => {
     setTotalPCS(total);
   };
 
-  const removeColumn = () => {
-    if (tableData[0].length <= 8) { // Keep at least the original 8 columns
-      dispatch(
-        showToast({
-          type: "warning",
-          msg: "Cannot remove more columns - minimum columns reached",
-        })
-      );
-      return;
-    }
-
-    setTableData(prevData =>
-      prevData.map(row => row.slice(0, -1)) // Remove last column from each row
-    );
-
-    dispatch(
-      showToast({
-        type: "success",
-        msg: "Last column removed successfully",
-      })
-    );
-  };
-
-  const removeRow = () => {
-    if (tableData.length <= 2) { // Keep at least header row + 1 data row
-      dispatch(
-        showToast({
-          type: "warning",
-          msg: "Cannot remove more rows - minimum rows reached",
-        })
-      );
-      return;
-    }
-
-    setTableData(prevData => prevData.slice(0, -10));
-
-    dispatch(
-      showToast({
-        type: "success",
-        msg: "Last row removed successfully",
-      })
-    );
-  };
   useEffect(() => {
     calculateTotalPCS();
   }, [tableData]);
@@ -1229,6 +1239,15 @@ const InchesToMM = () => {
         <Button className="mb-2 me-2" color="danger" onClick={removeColumn}>
           Remove Column
         </Button>
+        <Button className="mb-2 me-2" color="primary" onClick={insertRowAbove}>
+          Insert Row Above
+        </Button>
+        <Button className="mb-2 me-2" color="primary" onClick={insertRowBelow}>
+          Insert Row Below
+        </Button>
+        <Button className="mb-2 me-2" color="danger" onClick={removeSelectedRows}>
+          Remove Selected Rows
+        </Button>
         <Button className="mb-2 ml-2 me-2" color="primary" onClick={addRow}>
           Add Row
         </Button>
@@ -1294,16 +1313,32 @@ const InchesToMM = () => {
           afterChange={handleTableChange}
           autoWrapRow={true}
           autoWrapCol={true}
+          selectionMode="multiple"
+          afterSelection={(r, c, r2, c2) => {
+            const start = Math.min(r, r2);
+            const end = Math.max(r, r2);
+            const rows = [];
+            for (let i = start; i <= end; i++) {
+              rows.push(i);
+            }
+            setSelectedRows(rows);
+          }}
           cells={(row, col, prop) => {
             const cellProperties = {};
             const rowData = tableData[row] || [];
 
-            // Check if any cell in the row contains a special value
             const containsSpecialValue = rowData.some(
               (cellValue) => /aw/i.test(cellValue) && cellValue !== "Drawer"
             );
 
-            // Apply highlight for rows with special values
+            if (selectedRows.includes(row)) {
+              cellProperties.renderer = (instance, td, row, col, prop, value) => {
+                td.style.backgroundColor = "#e3f2fd";
+                td.style.fontWeight = "bold";
+                td.textContent = value || "";
+              };
+            }
+
             if (containsSpecialValue) {
               cellProperties.renderer = (
                 instance,
@@ -1313,12 +1348,11 @@ const InchesToMM = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#ffeb3b"; // Highlight yellow
+                td.style.backgroundColor = "#ffeb3b";
                 td.style.fontWeight = "bold";
                 td.textContent = value || "";
               };
             } else if (row === 0) {
-              // Apply green background for the first row
               cellProperties.renderer = (
                 instance,
                 td,
@@ -1327,13 +1361,12 @@ const InchesToMM = () => {
                 prop,
                 value
               ) => {
-                td.style.backgroundColor = "#059862"; // Green background
+                td.style.backgroundColor = "#059862";
                 td.style.fontWeight = "bold";
                 td.textContent = value;
               };
             }
 
-            // Additional logic for Remark (col 3) and Remark 2 (col 4)
             if ((col === 3 || col === 4) && row > 0) {
               cellProperties.renderer = (
                 instance,
@@ -1343,10 +1376,10 @@ const InchesToMM = () => {
                 prop,
                 value
               ) => {
-                td.innerHTML = ""; // Clear any existing content
+                td.innerHTML = "";
                 let text = "";
                 let imageNumber = "";
-                const hasPlus = value?.includes("+"); // Check if "+" exists
+                const hasPlus = value?.includes("+");
 
                 const placeholderMap = {
                   c: "Cross",
@@ -1361,50 +1394,42 @@ const InchesToMM = () => {
                   ar: "Drawer",
                 };
 
-                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i); // Match key, number, and optional "+"
+                const match = value?.match(/^([a-z]+)?\.?(\d+)?\+?$/i);
 
-                // Handle matching and placeholder conversion
                 if (match) {
-                  const key = match[1]?.toLowerCase(); // Extract key
-                  const number = match[2]; // Extract number
+                  const key = match[1]?.toLowerCase();
+                  const number = match[2];
 
-                  // Map placeholder text using key
                   if (key && placeholderMap[key]) {
                     text = placeholderMap[key];
                   }
 
-                  // Check for a valid image number
                   if (number && ["1", "2", "3", "5"].includes(number)) {
                     imageNumber = number;
                   }
                 }
 
-                // Apply yellow background if "+" exists
                 if (hasPlus || containsSpecialValue) {
-                  td.style.backgroundColor = "#ffeb3b"; // Yellow background
-                  td.style.fontWeight = "bold"; // Bold text
+                  td.style.backgroundColor = "#ffeb3b";
+                  td.style.fontWeight = "bold";
                 }
 
-                // If a valid image number is present, show the image
                 if (imageNumber) {
-                  const imgSrc = arrowMap[imageNumber]; // Use your map for image sources
+                  const imgSrc = arrowMap[imageNumber];
                   if (imgSrc) {
                     const img = document.createElement("img");
                     img.src = imgSrc;
                     img.style.maxWidth = "20px";
                     img.style.maxHeight = "20px";
                     img.style.marginLeft = "8px";
-                    td.appendChild(img); // Append the image to the cell
+                    td.appendChild(img);
                   }
-                  // Hide text when an image is displayed
                   text = "";
                 }
 
-                // If no image, show placeholder text (e.g., "Fix", "Glass")
                 if (text) {
                   td.textContent = text;
                 } else if (!imageNumber) {
-                  // If no match, show raw value
                   td.textContent = value || "";
                 }
               };
